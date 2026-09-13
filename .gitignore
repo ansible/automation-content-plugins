@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-types/
+dist-dynamic/
+*.log
+.yarn/*
+!.yarn/releases
+!.yarn/patches
+.DS_Store
+coverage/

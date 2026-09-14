@@ -7,7 +7,7 @@ const get = async p => {
 };
 const h = t => console.log(`\n${'─'.repeat(70)}\n${t}\n${'─'.repeat(70)}`);
 
-await fetch(`${base}/registries/local-quay/sync`, { method: 'POST' });
+await fetch(`${base}/registries/local-registry/sync`, { method: 'POST' });
 
 h('Level 0 — Execution environments');
 const ees = await get('/content?type=execution-environment');

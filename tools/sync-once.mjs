@@ -1,6 +1,6 @@
 /** Trigger one registry sync and report status and duration. */
 const base = (process.env.PORTAL_URL ?? 'http://127.0.0.1:7007') + '/api/automation-content';
-const registry = process.argv[2] ?? 'local-quay';
+const registry = process.argv[2] ?? 'local-registry';
 
 const started = Date.now();
 const res = await fetch(`${base}/registries/${registry}/sync`, { method: 'POST' });

@@ -10,19 +10,41 @@ Mounted in Automation Portal at **`/automation-content`**.
 > routes and entity shape all still move without notice. Nothing here is supported or
 > ready to depend on.
 
-## Quick start
+## Local Development Setup for Automation Portal
 
-From a fresh clone to content on screen. About ten minutes, most of it waiting.
+From a fresh clone to content on screen. About twenty minutes, most of it the image
+build in step 1 — start that first and set up the rest while it runs.
 
-**You need:** Node 22 or 24 with Yarn 4 (`corepack enable`), and Podman.
+**You need:** Node 22 or 24 with Yarn 4 (`corepack enable`), Podman, and Python 3.11+.
 
-To see what is *inside* an execution environment — collections, modules, plugins,
-documentation — you also need a patched `ansible-builder`, because manifest generation
-and publishing are not upstream yet. That is step 6, and
-[its guide](docs/guides/building-an-execution-environment.md) covers it. Steps 1–5 work
-without it.
+**1. Build an execution environment with a content manifest**
 
-**1. Install**
+This is what makes the rest worth looking at. Without it an image still appears in the
+portal, but its contents report as **unknown** — the state most images in the field are
+in today.
+
+Manifest generation and publishing are not in upstream `ansible-builder`, so build from
+the fork:
+
+```bash
+git clone -b move-changes-from-ansible-builder \
+  https://github.com/ganeshrn/ansible-builder.git
+cd ansible-builder
+pip install -e .                       # Python 3.11+; a virtualenv is worth it
+ansible-builder publish --help         # absent upstream: confirms you have the fork
+
+ansible-builder build \
+  -f examples/content-manifest/execution-environment.yml \
+  -t localhost:8080/demo/network-ee:dev \
+  --container-runtime podman
+```
+
+The manifest is generated **inside the image, by that image's own `ansible-core`** — no
+flag needed, it is on by default. Doing it any other way produces documentation that can
+be quietly wrong.
+Details: **[docs/guides/building-an-execution-environment.md](docs/guides/building-an-execution-environment.md)**.
+
+**2. Install this repository**
 
 ```bash
 yarn install
@@ -30,7 +52,7 @@ yarn tsc          # also emits dist-types/, which packaging later depends on
 yarn test
 ```
 
-**2. Start a local Quay**
+**3. Start a local Quay**
 
 ```bash
 ./dev/quay/setup.sh
@@ -39,7 +61,7 @@ yarn test
 Generates secrets into `dev/quay/.env` (gitignored), starts Quay with Postgres and
 Redis, and creates the first user. A couple of minutes on a cold pull.
 
-**3. Put an image in it**
+**4. Push the image, and its manifest beside it**
 
 ```bash
 set -a; . dev/quay/.env; set +a
@@ -48,19 +70,21 @@ export CONTENT_REGISTRY_PASSWORD="$QUAY_PASSWORD"
 
 podman login --tls-verify=false -u "$CONTENT_REGISTRY_USERNAME" \
   -p "$CONTENT_REGISTRY_PASSWORD" localhost:8080
-podman pull quay.io/ansible/creator-ee:latest
-podman tag  quay.io/ansible/creator-ee:latest localhost:8080/demo/network-ee:dev
-podman push --tls-verify=false localhost:8080/demo/network-ee:dev
+
+ansible-builder publish localhost:8080/demo/network-ee:dev --insecure
 ```
 
-**4. Run the backend**
+`publish` pushes the image, then publishes the content manifest as an OCI referrer
+beside it — so a consumer can read what is inside without pulling gigabytes.
+
+**5. Run the backend**
 
 ```bash
 cp .env.local.example .env.local      # already points at 127.0.0.1:8080
 yarn workspace backend start          # http://127.0.0.1:7007
 ```
 
-**5. Sync and look**
+**6. Sync and look**
 
 ```bash
 node tools/sync-once.mjs local-registry     # discover now, rather than waiting
@@ -68,31 +92,15 @@ node tools/verify-levels.mjs                # walk what it found
 node tools/show-catalog.mjs                 # the same content as catalog entities
 ```
 
-You should see the image catalogued with its contents reported as **unknown** — correct,
-because it has no content manifest, and the state most images in the field are in.
+You should see the environment with its collections, modules and plugins — down to
+nested suboptions on individual modules. If contents come back as **unknown**, the
+manifest did not reach the registry; check step 4.
 
 `sync-once` refreshes the content API immediately. Catalog *entities* are written by a
 separate scheduled provider that first runs a few seconds after startup, so give
 `show-catalog` a moment if it comes back empty.
 
-**6. Get the full inventory**
-
-Turning "contents unknown" into collections, modules, plugins and documentation needs an
-EE that carries a build-time content manifest, published to the registry as an OCI
-referrer. That needs the patched `ansible-builder`:
-
-```bash
-git clone -b move-changes-from-ansible-builder \
-  https://github.com/ganeshrn/ansible-builder.git
-cd ansible-builder && pip install -e .        # Python 3.11+
-
-ansible-builder build   -t localhost:8080/demo/network-ee:dev --container-runtime podman
-ansible-builder publish    localhost:8080/demo/network-ee:dev --insecure
-```
-
-Full walkthrough, including the EE definition and why generation happens inside the
-image:
-**[docs/guides/building-an-execution-environment.md](docs/guides/building-an-execution-environment.md)**.
+---
 
 That is the standalone harness. For the real portal — RHDH, dynamic plugin loading, the
 UI at `/automation-content` — see

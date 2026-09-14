@@ -48,8 +48,10 @@ catalog:
           repositories:
             - demo/network-ee
           insecure: true
-          # A local zot or registry:2 needs no credentials. For a registry that does,
-          # use `type: basic` and export CONTENT_REGISTRY_USERNAME and
-          # CONTENT_REGISTRY_PASSWORD in the shell that starts the backend.
+          # Credentials come from the environment, never from this file. For a
+          # registry that needs none — a local zot or registry:2 — use
+          # `type: anonymous` and drop the two lines below.
           auth:
-            type: anonymous
+            type: basic
+            username: ${CONTENT_REGISTRY_USERNAME}
+            password: ${CONTENT_REGISTRY_PASSWORD}

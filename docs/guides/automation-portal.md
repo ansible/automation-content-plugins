@@ -37,8 +37,8 @@ In `.env`:
 |---|---|
 | `PLUGIN_REPO` | your `ansible-backstage-plugins` clone |
 | `CONTENT_PLUGIN_REPO` | **this** repository |
-| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:5000` |
-| `CONTENT_REGISTRY_USERNAME` / `_PASSWORD` | only if your registry requires auth |
+| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:8080` |
+| `CONTENT_REGISTRY_USERNAME` / `_PASSWORD` | from `dev/quay/.env` in this repo |
 
 Note `host.containers.internal`, not `127.0.0.1` — the portal runs in a container, where
 `127.0.0.1` is the container itself.

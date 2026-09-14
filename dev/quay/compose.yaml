@@ -1,0 +1,47 @@
+# A local Quay for development.
+#
+# Quay rather than a simpler registry because Quay is what customers actually run, and
+# because it is strict: it rejects several things the OCI specification permits. Those
+# rejections are the reason parts of this codebase look the way they do, and they only
+# reproduce against the real thing. See docs/guides/local-registry.md.
+
+services:
+  quay-db:
+    image: docker.io/library/postgres:15-alpine
+    container_name: acp-quay-db
+    environment:
+      POSTGRES_USER: quay
+      POSTGRES_PASSWORD: quay
+      POSTGRES_DB: quay
+    volumes:
+      - quay-db-data:/var/lib/postgresql/data
+      # Quay requires the pg_trgm extension, and will not create it itself.
+      - ./pg-init.sql:/docker-entrypoint-initdb.d/pg_trgm.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quay -d quay"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: acp-quay-redis
+    command: ["redis-server", "--save", ""]
+
+  quay:
+    image: quay.io/projectquay/quay:latest
+    container_name: acp-quay
+    depends_on:
+      quay-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/conf/stack:ro
+      - quay-storage:/datastorage
+
+volumes:
+  quay-db-data:
+  quay-storage:

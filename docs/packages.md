@@ -4,8 +4,7 @@
 |---|---|
 | `@ansible/content-model` | The universal content object. Types and pure helpers, **zero runtime dependencies**, no Backstage imports. The shared contract. |
 | `@ansible/automation-content-common` | OCI Distribution v2 client, capability probe, digest cache, content-manifest reader, the OCI backend adapter, and the `BackendAdapter` / `ContentTypeAdapter` / `SigningProvider` contracts. |
-| `@ansible/content-type-execution-environment` | The execution environment content type: recognises EE images and enumerates them from a build-time content manifest. |
-| `@ansible/content-type-helm-chart` | The Helm chart content type. Deliberately minimal — it exists to demonstrate that a content type is something you add, not something you edit. |
+| `@ansible/content-type-execution-environment` | The execution environment content type: recognises EE images and enumerates them from a build-time content manifest. One package per content type — see [guides/adding-a-content-type.md](guides/adding-a-content-type.md). |
 | `@ansible/plugin-catalog-backend-module-automation-content` | `OCIRegistryEntityProvider` — discovers content in configured registries and emits catalog entities. Also the composition root that registers content types. |
 | `@ansible/plugin-automation-content-backend` | The content API: discovery, documentation, and requirements resolution. Spec in [`../api/openapi.yaml`](../api/openapi.yaml). |
 | `@ansible/plugin-automation-content` | Frontend. Mounted wherever `dynamicRoutes` says — by default `/automation-content`. |

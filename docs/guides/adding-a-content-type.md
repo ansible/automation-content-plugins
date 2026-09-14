@@ -5,8 +5,10 @@ the codebase that names one.
 
 ## The four steps
 
-**1. Create the package.** Copy `plugins/content-type-helm-chart`, which is deliberately
-minimal, and implement `ContentTypeAdapter`:
+**1. Create the package.** One package per content type, under
+`plugins/content-type-<name>/`. `content-type-execution-environment` is the worked
+example; the `SbomAdapter` in `contentTypes.test.ts` is the minimum that does anything
+at all, in about thirty lines. Implement `ContentTypeAdapter`:
 
 ```ts
 export class MyAdapter implements ContentTypeAdapter {
@@ -35,7 +37,6 @@ Two rules the interface cannot enforce for you:
 export function defaultContentTypes(): ContentTypeRegistry {
   return new ContentTypeRegistry()
     .register(new ExecutionEnvironmentAdapter())
-    .register(new HelmChartAdapter())
     .register(new MyAdapter());          // ← the only line that changes
 }
 ```
@@ -53,7 +54,7 @@ build it.
 Not the OCI client, the entity provider, the content index, the API, or the UI.
 
 `contentTypes.test.ts` holds that claim to account rather than asserting it: the test
-defines a third content type inside the test file and follows it through discovery to a
+defines a second content type inside the test file and follows it through discovery to a
 catalog entity. The only difference from the test above it is one `register()` call. If
 any part of the framework needed to learn about the new type, that test would not
 compile.

@@ -22,24 +22,37 @@ yarn tsc          # also emits dist-types/, which packaging later depends on
 yarn test
 ```
 
-**2. Start a registry and put an image in it**
+**2. Start a local Quay**
 
 ```bash
-podman run -d -p 5000:5000 --name zot ghcr.io/project-zot/zot-linux-amd64:latest
-
-podman pull quay.io/ansible/creator-ee:latest
-podman tag  quay.io/ansible/creator-ee:latest localhost:5000/demo/network-ee:dev
-podman push --tls-verify=false localhost:5000/demo/network-ee:dev
+./dev/quay/setup.sh
 ```
 
-**3. Run the backend**
+Generates secrets into `dev/quay/.env` (gitignored), starts Quay with Postgres and
+Redis, and creates the first user. A couple of minutes on a cold pull.
+
+**3. Put an image in it**
 
 ```bash
-cp .env.local.example .env.local      # already points at 127.0.0.1:5000
+set -a; . dev/quay/.env; set +a
+export CONTENT_REGISTRY_USERNAME="$QUAY_USERNAME"
+export CONTENT_REGISTRY_PASSWORD="$QUAY_PASSWORD"
+
+podman login --tls-verify=false -u "$CONTENT_REGISTRY_USERNAME" \
+  -p "$CONTENT_REGISTRY_PASSWORD" localhost:8080
+podman pull quay.io/ansible/creator-ee:latest
+podman tag  quay.io/ansible/creator-ee:latest localhost:8080/demo/network-ee:dev
+podman push --tls-verify=false localhost:8080/demo/network-ee:dev
+```
+
+**4. Run the backend**
+
+```bash
+cp .env.local.example .env.local      # already points at 127.0.0.1:8080
 yarn workspace backend start          # http://127.0.0.1:7007
 ```
 
-**4. Sync and look**
+**5. Sync and look**
 
 ```bash
 node tools/sync-once.mjs local-registry
@@ -49,7 +62,7 @@ node tools/show-catalog.mjs
 You should see the image catalogued with its contents reported as **unknown** — correct,
 because it has no content manifest, and the state most images in the field are in.
 
-**5. Get the full inventory**
+**6. Get the full inventory**
 
 To see collections, modules, plugins and documentation, build an EE that carries a
 build-time content manifest:

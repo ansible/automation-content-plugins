@@ -88,8 +88,8 @@ one command.
 ## Build and publish
 
 ```bash
-ansible-builder build -t localhost:5000/demo/network-ee:dev --container-runtime podman
-ansible-builder publish localhost:5000/demo/network-ee:dev --insecure
+ansible-builder build -t localhost:8080/demo/network-ee:dev --container-runtime podman
+ansible-builder publish localhost:8080/demo/network-ee:dev --insecure
 ```
 
 The build takes several minutes; generating the manifest takes a few seconds of that.
@@ -101,10 +101,10 @@ manifest for an image already in the registry, and needs no container runtime at
 ## Check it worked
 
 ```bash
-curl -s http://127.0.0.1:5000/v2/demo/network-ee/tags/list
+node tools/trace-auth.mjs
 ```
 
-You should see your tag plus a `sha256-<hex>` tag. That second one is the referrer
+The tag listing should show your tag plus a `sha256-<hex>` tag. That second one is the referrer
 fallback index — the manifest, discoverable on registries with no referrers API.
 
 The patched `ansible-builder` also ships a verifier that reads the manifest back the way
@@ -112,7 +112,7 @@ this stack does and checks it is usable:
 
 ```bash
 python3 examples/content-manifest/verify-content-manifest.py \
-  localhost:5000/demo/network-ee:dev --insecure
+  localhost:8080/demo/network-ee:dev --insecure
 ```
 
 Then start the backend and the contents will be there:

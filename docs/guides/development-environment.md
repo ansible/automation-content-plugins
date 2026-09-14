@@ -30,12 +30,13 @@ change.
 cp .env.local.example .env.local
 ```
 
-The default points at `http://127.0.0.1:5000`. For a registry that requires
-authentication, export the credentials in the shell rather than writing them to a file:
+The default points at the local Quay on `http://127.0.0.1:8080`. Credentials come from
+the environment, never from a file:
 
 ```bash
-export CONTENT_REGISTRY_USERNAME=...
-export CONTENT_REGISTRY_PASSWORD=...
+set -a; . dev/quay/.env; set +a
+export CONTENT_REGISTRY_USERNAME="$QUAY_USERNAME"
+export CONTENT_REGISTRY_PASSWORD="$QUAY_PASSWORD"
 ```
 
 ## Run
@@ -77,7 +78,8 @@ yarn tsc                                     # typecheck
 The live-registry integration tests are skipped unless `E2E_REGISTRY` is set:
 
 ```bash
-E2E_REGISTRY=127.0.0.1:5000 E2E_REPOSITORY=demo/network-ee E2E_TAG=dev \
+E2E_REGISTRY=127.0.0.1:8080 E2E_REPOSITORY=demo/network-ee E2E_TAG=dev \
+E2E_USERNAME="$CONTENT_REGISTRY_USERNAME" E2E_PASSWORD="$CONTENT_REGISTRY_PASSWORD" \
   yarn workspace @ansible/automation-content-common test liveRegistry --watch=false
 ```
 

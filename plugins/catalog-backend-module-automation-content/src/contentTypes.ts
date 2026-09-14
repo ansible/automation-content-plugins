@@ -1,6 +1,5 @@
 import { ContentTypeRegistry } from '@ansible/automation-content-common';
 import { ExecutionEnvironmentAdapter } from '@ansible/content-type-execution-environment';
-import { HelmChartAdapter } from '@ansible/content-type-helm-chart';
 
 /**
  * The content types this deployment recognises.
@@ -15,7 +14,5 @@ import { HelmChartAdapter } from '@ansible/content-type-helm-chart';
  * file and follows it through discovery to a catalog entity.
  */
 export function defaultContentTypes(): ContentTypeRegistry {
-  return new ContentTypeRegistry()
-    .register(new ExecutionEnvironmentAdapter())
-    .register(new HelmChartAdapter());
+  return new ContentTypeRegistry().register(new ExecutionEnvironmentAdapter());
 }

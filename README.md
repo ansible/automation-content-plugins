@@ -6,9 +6,19 @@ types, over any OCI-compliant registry.
 
 Mounted in Automation Portal at **`/automation-content`**.
 
-> **Status: proof of concept.** Validating architecture, not shipping a product. See the
-> recorded in .sdlc/adrs/, each stating the alternatives it rejected —
+> **Status: proof of concept, under active development.** Interfaces, config shape, API
+> routes and entity shape all still move without notice, and nothing here is supported or
+> ready to depend on. The point is to validate architecture, not to ship a product.
+>
+> Architecture decisions are recorded in [`.sdlc/adrs/`](.sdlc/adrs/). The design set they
+> state the alternatives they rejected and why, so each can be followed on its own —
 > `04-requirements-driven-design.md`, `05-separation-of-concerns.md` and `06-poc-spec.md`.
+>
+> **Proven so far:** the data path end to end — a build-time content manifest pushed to a
+> live Quay and read back in 80 ms, and the same content rendered in Automation Portal at
+> `/automation-content`. **Not yet proven:** signing (interface only), governance across a
+> re-pointed tag, a second content type, more than one registry, and scale beyond a
+> handful of images.
 
 ## Why this exists
 
@@ -25,10 +35,13 @@ the **storage backend and the content type are independent plug-in axes**, so th
 | Package | Role |
 |---|---|
 | `@ansible/content-model` | The universal content object. Types and pure helpers, **zero runtime dependencies**, no Backstage imports. The shared contract. |
-| `@ansible/automation-content-common` | OCI Distribution v2 client, capability probe, and the `BackendAdapter` / `ContentTypeAdapter` / `SigningProvider` contracts. |
+| `@ansible/automation-content-common` | OCI Distribution v2 client, capability probe, digest cache, content-manifest reader, and the `BackendAdapter` / `ContentTypeAdapter` / `SigningProvider` contracts. |
+| `@ansible/plugin-catalog-backend-module-automation-content` | `OCIRegistryEntityProvider` — discovers content in configured registries and emits catalog entities. |
+| `@ansible/plugin-automation-content-backend` | The content API: discovery, documentation, and requirements resolution. Spec in [`api/openapi.yaml`](api/openapi.yaml). |
+| `@ansible/plugin-automation-content` | Frontend. Mounted wherever `dynamicRoutes` says — by default `/automation-content`. |
 
-Planned: `automation-content-backend`, `catalog-backend-module-automation-content`,
-`automation-content` (frontend).
+`packages/backend` is a minimal standalone harness: the catalog plus these plugins and
+nothing else, for working on the backend without standing up a portal.
 
 ## Architectural rules
 
@@ -87,9 +100,29 @@ Requires Node 22 or 24, Yarn 4 via Corepack.
 
 ```bash
 yarn install
-yarn tsc                                              # typecheck
-yarn workspace @ansible/automation-content-common test --watch=false
+yarn tsc          # typecheck
+yarn test         # unit tests
 ```
+
+### Running it
+
+Two loops, depending on what you are working on:
+
+- **Standalone harness** — `yarn workspace backend start` gives you the catalog, the
+  content provider and the API on `http://127.0.0.1:7007`, with no portal. Registries are
+  configured in `app-config.yaml`; copy `.env.local.example` to `.env.local` to point it
+  at one.
+- **Full Automation Portal** — RHDH with dynamic plugin loading and the UI at
+  `/automation-content`, via
+  [`automation-portal-local`](https://github.com/ansible-automation-platform/automation-portal-local)
+  on branch **`feat/automation-content-plugins`**. That branch adds the content plugin
+  export and pack step (`make build-content-plugins`), the `automationContent` catalog
+  provider, the `dynamicRoutes` block that mounts the UI, and the registry environment
+  variables. Point its `CONTENT_PLUGIN_REPO` at this checkout and run `make start`.
+
+Both need a registry with content in it, and both are covered step by step — including the
+container networking and registry auth wrinkles that will otherwise cost you an afternoon
+— in **[docs/guides/development-environment.md](docs/guides/development-environment.md)**.
 
 ### Testing against real registries
 

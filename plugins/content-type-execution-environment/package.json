@@ -19,7 +19,9 @@
     "test": "backstage-cli package test",
     "clean": "backstage-cli package clean"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@ansible/automation-content-common": "workspace:^",
     "@ansible/content-model": "workspace:^"

@@ -23,12 +23,34 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@ansible/content-type-execution-environment@workspace:^, @ansible/content-type-execution-environment@workspace:plugins/content-type-execution-environment":
+  version: 0.0.0-use.local
+  resolution: "@ansible/content-type-execution-environment@workspace:plugins/content-type-execution-environment"
+  dependencies:
+    "@ansible/automation-content-common": "workspace:^"
+    "@ansible/content-model": "workspace:^"
+    "@backstage/cli": "npm:^0.36.0"
+  languageName: unknown
+  linkType: soft
+
+"@ansible/content-type-helm-chart@workspace:^, @ansible/content-type-helm-chart@workspace:plugins/content-type-helm-chart":
+  version: 0.0.0-use.local
+  resolution: "@ansible/content-type-helm-chart@workspace:plugins/content-type-helm-chart"
+  dependencies:
+    "@ansible/automation-content-common": "workspace:^"
+    "@ansible/content-model": "workspace:^"
+    "@backstage/cli": "npm:^0.36.0"
+  languageName: unknown
+  linkType: soft
+
 "@ansible/plugin-automation-content-backend@workspace:^, @ansible/plugin-automation-content-backend@workspace:plugins/automation-content-backend":
   version: 0.0.0-use.local
   resolution: "@ansible/plugin-automation-content-backend@workspace:plugins/automation-content-backend"
   dependencies:
     "@ansible/automation-content-common": "workspace:^"
     "@ansible/content-model": "workspace:^"
+    "@ansible/content-type-execution-environment": "workspace:^"
+    "@ansible/content-type-helm-chart": "workspace:^"
     "@ansible/plugin-catalog-backend-module-automation-content": "workspace:^"
     "@backstage/backend-plugin-api": "npm:^1.10.0"
     "@backstage/cli": "npm:^0.36.0"
@@ -72,6 +94,8 @@ __metadata:
   dependencies:
     "@ansible/automation-content-common": "workspace:^"
     "@ansible/content-model": "workspace:^"
+    "@ansible/content-type-execution-environment": "workspace:^"
+    "@ansible/content-type-helm-chart": "workspace:^"
     "@backstage/backend-plugin-api": "npm:^1.10.0"
     "@backstage/catalog-model": "npm:^1.10.0"
     "@backstage/cli": "npm:^0.36.0"

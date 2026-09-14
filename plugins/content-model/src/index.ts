@@ -9,3 +9,4 @@
  * release cycle govern a schema it only half owns.
  */
 export * from './contentObject';
+export * from './contentManifest';

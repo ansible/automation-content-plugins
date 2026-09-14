@@ -19,7 +19,7 @@
     "lint": "backstage-cli package lint",
     "test": "backstage-cli package test",
     "clean": "backstage-cli package clean",
-    "export-dynamic": "rhdh-cli plugin export --embed-package @ansible/automation-content-common --embed-package @ansible/content-model --embed-package @ansible/plugin-catalog-backend-module-automation-content --embed-package @ansible/content-type-execution-environment --embed-package @ansible/content-type-helm-chart"
+    "export-dynamic": "rhdh-cli plugin export --embed-package @ansible/automation-content-common --embed-package @ansible/content-model --embed-package @ansible/plugin-catalog-backend-module-automation-content --embed-package @ansible/content-type-execution-environment"
   },
   "files": [
     "dist",
@@ -29,7 +29,6 @@
     "@ansible/automation-content-common": "workspace:^",
     "@ansible/content-model": "workspace:^",
     "@ansible/content-type-execution-environment": "workspace:^",
-    "@ansible/content-type-helm-chart": "workspace:^",
     "@ansible/plugin-catalog-backend-module-automation-content": "workspace:^",
     "@backstage/backend-plugin-api": "^1.10.0",
     "express": "^4.21.0",

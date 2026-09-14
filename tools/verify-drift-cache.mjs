@@ -21,7 +21,7 @@ console.log(`  hit rate: ${((c.hits / (c.hits + c.misses)) * 100).toFixed(1)}%`)
 console.log(`  retained: ${(c.bytes / 1024).toFixed(0)} KiB across ${c.entries} entries`);
 
 h('2. Drift poll with nothing changed — should be cheap and refresh nothing');
-const quiet = await post('/registries/local-quay/poll');
+const quiet = await post('/registries/local-registry/poll');
 console.log(`  changed=${quiet.body.changed} refreshed=${quiet.body.refreshed} ` +
   `requests=${quiet.body.requests}  ${quiet.ms} ms`);
 

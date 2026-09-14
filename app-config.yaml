@@ -39,14 +39,18 @@ catalog:
     automationContent:
       owner: group:default/ansible
       registries:
-        - name: local-quay
+        - name: local-registry
           url: ${CONTENT_REGISTRY_URL}
-          # This Quay has catalog enumeration disabled, so repositories are listed
-          # explicitly. The capability probe reports it, and the provider degrades
-          # to the configured list rather than failing.
+          # Repositories are listed explicitly rather than enumerated. Many registries
+          # disable the _catalog endpoint, so this is the path that always works — the
+          # capability probe reports what the registry supports and the provider
+          # degrades to this list rather than failing.
           repositories:
             - demo/network-ee
           insecure: true
+          # Credentials come from the environment, never from this file. For a
+          # registry that needs none — a local zot or registry:2 — use
+          # `type: anonymous` and drop the two lines below.
           auth:
             type: basic
             username: ${CONTENT_REGISTRY_USERNAME}

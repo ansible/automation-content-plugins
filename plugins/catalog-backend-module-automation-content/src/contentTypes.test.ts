@@ -1,12 +1,11 @@
 /**
- * S7 — adding a content type requires no core change.
+ * Adding a content type must require no change to the framework.
  *
- * This is the criterion the PoC specification would not drop, because it is the only
- * test of the extensibility thesis the whole outcome rests on. Everything else could
- * pass against a stack that is closed in practice.
+ * This is the only test of the extensibility claim the whole design rests on.
+ * Everything else could pass against a stack that is closed in practice.
  *
- * The test is constructed so that it cannot be satisfied by a change made elsewhere:
- * the third content type is defined *inside this file*, in about thirty lines, and then
+ * It is constructed so that it cannot be satisfied by a change made elsewhere: the
+ * second content type is defined *inside this file*, in about thirty lines, and then
  * followed all the way to a catalog entity. If discovery, classification, enumeration
  * or entity emission needed to learn about it, this would not compile — let alone pass.
  */
@@ -24,7 +23,6 @@ import type { ContentObject, Enumeration } from '@ansible/content-model';
 import { unknownEnumeration } from '@ansible/content-model';
 import type { ContentTypeAdapter, UpdatePolicy } from '@ansible/automation-content-common';
 import { EXECUTION_ENVIRONMENT_TYPE } from '@ansible/content-type-execution-environment';
-import { HELM_CHART_TYPE, HELM_CONFIG_MEDIA_TYPE } from '@ansible/content-type-helm-chart';
 import { Entity } from '@backstage/catalog-model';
 import { OCIRegistryEntityProvider } from './OCIRegistryEntityProvider';
 import { defaultContentTypes } from './contentTypes';
@@ -100,7 +98,6 @@ function registryWithEverything(): MockRegistry {
       'demo/network-ee': [
         makeLabelledImage('poc', { 'ansible-execution-environment': 'true' }),
       ],
-      'demo/redis': [withConfigMediaType('19.6.0', HELM_CONFIG_MEDIA_TYPE)],
       'demo/bom': [withConfigMediaType('v1', SBOM_CONFIG_MEDIA_TYPE)],
       'demo/mystery': [makeImage({ tag: 'latest' })],
     },
@@ -140,12 +137,10 @@ const typeOf = (entities: Entity[], repository: string) =>
 
 // ---------------------------------------------------------------------------
 
-describe('S7 — a content type is added, not edited in', () => {
-  it('recognises the shipped content types', async () => {
+describe('a content type is added, not edited in', () => {
+  it('recognises the shipped content type', async () => {
     const entities = await discover(defaultContentTypes());
-
     expect(typeOf(entities, 'demo/network-ee')).toBe(EXECUTION_ENVIRONMENT_TYPE);
-    expect(typeOf(entities, 'demo/redis')).toBe(HELM_CHART_TYPE);
   });
 
   it('carries a content type defined entirely outside the framework', async () => {
@@ -153,9 +148,8 @@ describe('S7 — a content type is added, not edited in', () => {
     const entities = await discover(defaultContentTypes().register(new SbomAdapter()));
 
     expect(typeOf(entities, 'demo/bom')).toBe(SBOM_TYPE);
-    // And the types that were already there are unaffected.
+    // And the type that was already there is unaffected.
     expect(typeOf(entities, 'demo/network-ee')).toBe(EXECUTION_ENVIRONMENT_TYPE);
-    expect(typeOf(entities, 'demo/redis')).toBe(HELM_CHART_TYPE);
   });
 
   it('reports an unclaimed artifact honestly, with every adapter’s reason', async () => {
@@ -170,17 +164,18 @@ describe('S7 — a content type is added, not edited in', () => {
 
     const why = mystery?.metadata.annotations?.['ansible.com/classification'] ?? '';
     expect(why).toContain(EXECUTION_ENVIRONMENT_TYPE);
-    expect(why).toContain(HELM_CHART_TYPE);
     expect(why).toContain(SBOM_TYPE);
   });
 
   it('gives an unenumerated type an unknown enumeration, not an empty one', async () => {
-    const entities = await discover(defaultContentTypes());
-    const helm = entities.find(
-      e => e.metadata.annotations?.['ansible.com/repository'] === 'demo/redis',
+    // A type that does not enumerate must say so. An empty enumeration would assert
+    // that the artifact contains nothing, which is a different and false claim.
+    const entities = await discover(defaultContentTypes().register(new SbomAdapter()));
+    const sbom = entities.find(
+      e => e.metadata.annotations?.['ansible.com/repository'] === 'demo/bom',
     );
 
-    expect(helm?.metadata.annotations?.['ansible.com/enumeration-source']).toBe('unknown');
-    expect(helm?.metadata.tags).toContain('contents-unknown');
+    expect(sbom?.metadata.annotations?.['ansible.com/enumeration-source']).toBe('unknown');
+    expect(sbom?.metadata.tags).toContain('contents-unknown');
   });
 });

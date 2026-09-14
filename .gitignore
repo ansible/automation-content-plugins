@@ -15,3 +15,7 @@ coverage/
 .data/
 __pycache__/
 *.pyc
+
+# Local Quay: generated config and secrets
+dev/quay/config/
+dev/quay/.env

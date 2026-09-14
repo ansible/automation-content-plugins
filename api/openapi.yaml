@@ -227,7 +227,7 @@ components:
         ref:
           type: string
           description: Stable opaque identifier for this artifact.
-          examples: ['local-quay/demo/network-ee@sha256:05abb921']
+          examples: ['local-registry/demo/network-ee@sha256:05abb921']
         registry: { type: string }
         repository: { type: string }
         digest:

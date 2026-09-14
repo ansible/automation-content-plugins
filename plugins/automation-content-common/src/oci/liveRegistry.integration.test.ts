@@ -7,7 +7,7 @@
  *
  * Skipped unless E2E_REGISTRY is set, so the normal suite stays hermetic:
  *
- *   E2E_REGISTRY=localhost:8080 E2E_REPOSITORY=demo/network-ee E2E_TAG=poc \
+ *   E2E_REGISTRY=localhost:5000 E2E_REPOSITORY=demo/network-ee E2E_TAG=dev \
  *   E2E_USERNAME=... E2E_PASSWORD=... \
  *   yarn workspace @ansible/automation-content-common test liveRegistry
  */

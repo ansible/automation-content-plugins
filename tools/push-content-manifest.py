@@ -18,7 +18,7 @@ No third-party dependencies: `oras` is not always available, and the OCI push fl
 small enough to implement directly.
 
 Usage:
-    push-content-manifest.py --registry localhost:8080 --repository ansible/network-ee \
+    push-content-manifest.py --registry localhost:5000 --repository ansible/network-ee \
         --tag poc --manifest content-manifest.json [--insecure] [--username U --password P]
 """
 

@@ -12,10 +12,9 @@ plugins.
 
 Developer guides live under [`docs/guides/`](../docs/guides/) at the repo root.
 
-The design work these decisions are drawn from — requirements analysis, separation of
-concerns, and the decisions drawn from them — is restated here so that each ADR
-is self-contained. ADRs here record what was *decided*, with enough context to
-follow the reasoning without that workspace.
+Each ADR is self-contained. It states the context, the alternatives that were rejected
+and why, the decision, and its consequences — so the reasoning can be followed and
+challenged from this repository alone, without reference to any other document.
 
 ## Conventions
 

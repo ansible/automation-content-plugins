@@ -4,7 +4,7 @@
  * Mirrors exactly what OCIClient does, so the output is the real flow rather than a
  * description of it.
  */
-const registry = process.env.REGISTRY ?? '127.0.0.1:8080';
+const registry = process.env.REGISTRY ?? '127.0.0.1:5000';
 const repository = process.env.REPOSITORY ?? 'demo/network-ee';
 const username = process.env.REGISTRY_USERNAME ?? '';
 const password = process.env.REGISTRY_PASSWORD ?? '';

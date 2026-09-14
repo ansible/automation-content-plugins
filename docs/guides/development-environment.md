@@ -18,34 +18,42 @@ Both need a registry with content in it. Start there.
 
 ## 1. A registry with content
 
-Any OCI-compliant registry works. A local one can be started with podman, and
-workspace:
+Any OCI-compliant registry works. Two are worth running locally, because the difference
+between them is exactly what this stack has to survive:
 
 ```bash
-podman run -d -p 5000:5000 ghcr.io/project-zot/zot-linux-amd64:latest
-make up      # postgres + redis + Quay on http://127.0.0.1:8080
-make seed    # demo namespace, a collection, two execution environments
+# OCI 1.1: native referrers API, the target state
+podman run -d -p 5000:5000 --name zot ghcr.io/project-zot/zot-linux-amd64:latest
+
+# Minimal: no referrers API, no _catalog — the honest worst case
+podman run -d -p 5001:5000 --name registry2 docker.io/library/registry:2
 ```
 
-A local zot or registry:2 needs no credentials at all.
+Neither requires authentication, so `auth: { type: anonymous }` is enough in
+`app-config.yaml`. Against a registry that does require it, export
+`CONTENT_REGISTRY_USERNAME` and `CONTENT_REGISTRY_PASSWORD` in the shell that starts the
+backend, rather than writing them into a file.
 
-To get a **content manifest** onto an image — the build-time inventory described in
-[ADR-002](../../.sdlc/adrs/002-build-time-content-manifest.md) — build an execution
-environment with the generator included, then publish the manifest as a referrer:
+Now give it something to find. Push an execution environment, then publish the content
+manifest the build wrote into the image as an OCI referrer beside it — the build-time
+inventory described in [ADR-002](../../.sdlc/adrs/002-build-time-content-manifest.md):
 
 ```bash
+podman tag <your-ee-image> localhost:5000/demo/network-ee:dev
+podman push --tls-verify=false localhost:5000/demo/network-ee:dev
+
 CID=$(podman create <your-ee-image>)
 podman cp "$CID":/usr/share/ansible/content-manifest.json ./content-manifest.json
 podman rm -f "$CID"
 
 python3 tools/push-content-manifest.py \
-  --registry 127.0.0.1:8080 --repository demo/network-ee --tag poc \
-  --manifest content-manifest.json --insecure \
-  --insecure
+  --registry localhost:5000 --repository demo/network-ee --tag dev \
+  --manifest content-manifest.json --insecure
 ```
 
 Images without a manifest still work — discovery falls one rung down the enumeration
-ladder and says so.
+ladder and reports the contents as unknown, which is the state most images in the field
+are in today. That path is worth exercising deliberately, not just tolerating.
 
 ## 2. Standalone harness
 
@@ -59,8 +67,6 @@ Point the harness at the registry and start it:
 
 ```bash
 cp .env.local.example .env.local            # then edit
-export CONTENT_REGISTRY_USERNAME=demo
-export CONTENT_REGISTRY_PASSWORD=...        # only if your registry requires auth
 yarn workspace backend start
 ```
 
@@ -79,8 +85,7 @@ node tools/demo-api.mjs                     # walk the API end to end
 The live-registry tests are skipped unless `E2E_REGISTRY` is set:
 
 ```bash
-E2E_REGISTRY=127.0.0.1:8080 E2E_REPOSITORY=demo/network-ee E2E_TAG=poc \
-E2E_INSECURE=1 \
+E2E_REGISTRY=127.0.0.1:5000 E2E_REPOSITORY=demo/network-ee E2E_TAG=dev \
   yarn workspace @ansible/automation-content-common test liveRegistry --watch=false
 ```
 
@@ -107,8 +112,8 @@ Set in `.env`:
 |---|---|
 | `PLUGIN_REPO` | your `ansible-backstage-plugins` clone |
 | `CONTENT_PLUGIN_REPO` | this repository |
-| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:8080` |
-| `CONTENT_REGISTRY_USERNAME` | `demo` |
+| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:5000` |
+
 | `CONTENT_REGISTRY_PASSWORD` | only if your registry requires auth |
 
 Then:

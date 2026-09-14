@@ -10,9 +10,8 @@ Mounted in Automation Portal at **`/automation-content`**.
 > routes and entity shape all still move without notice, and nothing here is supported or
 > ready to depend on. The point is to validate architecture, not to ship a product.
 >
-> Architecture decisions are recorded in [`.sdlc/adrs/`](.sdlc/adrs/). The design set they
-> state the alternatives they rejected and why, so each can be followed on its own —
-> `04-requirements-driven-design.md`, `05-separation-of-concerns.md` and `06-poc-spec.md`.
+> Architecture decisions, with the alternatives they rejected and why, are recorded in
+> [`.sdlc/adrs/`](.sdlc/adrs/).
 >
 > **Proven so far:** the data path end to end — a build-time content manifest pushed to a
 > live Quay and read back in 80 ms, and the same content rendered in Automation Portal at
@@ -107,8 +106,40 @@ Two loops. Use the one that matches what you are working on.
 
 - Node 22 or 24, Yarn 4 via Corepack (`corepack enable`)
 - Podman — for the registry, and for the portal loop
-- A registry with content in it. The PoC Quay is the intended target:
-  `podman run -d -p 5000:5000 ghcr.io/project-zot/zot-linux-amd64:latest`
+- A registry with content in it — see below
+
+### A registry to develop against
+
+Any OCI-compliant registry works. Two are worth running locally, because the difference
+between them is the thing this stack has to survive:
+
+```bash
+# OCI 1.1: native referrers API, the target state
+podman run -d -p 5000:5000 --name zot ghcr.io/project-zot/zot-linux-amd64:latest
+
+# Minimal: no referrers API, no _catalog — the honest worst case
+podman run -d -p 5001:5000 --name registry2 docker.io/library/registry:2
+```
+
+Give one of them an execution environment and a content manifest to find:
+
+```bash
+podman tag <your-ee-image> localhost:5000/demo/network-ee:dev
+podman push --tls-verify=false localhost:5000/demo/network-ee:dev
+
+# Extract the manifest the build wrote into the image, and publish it as a referrer.
+CID=$(podman create <your-ee-image>)
+podman cp "$CID":/usr/share/ansible/content-manifest.json ./content-manifest.json
+podman rm -f "$CID"
+
+python3 tools/push-content-manifest.py \
+  --registry localhost:5000 --repository demo/network-ee --tag dev \
+  --manifest content-manifest.json --insecure
+```
+
+An execution environment built without a content manifest still works — discovery falls
+one rung down the enumeration ladder and reports the contents as unknown, which is the
+state most images in the field are in today.
 
 ### First run
 
@@ -122,8 +153,9 @@ yarn test
 
 ```bash
 cp .env.local.example .env.local          # point it at your registry
-export CONTENT_REGISTRY_USERNAME=demo
-export CONTENT_REGISTRY_PASSWORD=...      # only if your registry requires auth
+# Only if your registry requires auth; a local zot or registry:2 does not.
+export CONTENT_REGISTRY_USERNAME=...
+export CONTENT_REGISTRY_PASSWORD=...
 yarn workspace backend start
 ```
 
@@ -163,7 +195,7 @@ Set in `.env`:
 |---|---|
 | `PLUGIN_REPO` | your `ansible-backstage-plugins` clone |
 | `CONTENT_PLUGIN_REPO` | **this** repository |
-| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:8080` |
+| `CONTENT_REGISTRY_URL` | `http://host.containers.internal:5000` |
 | `CONTENT_REGISTRY_USERNAME` / `_PASSWORD` | only if your registry requires auth |
 
 ```bash
@@ -248,12 +280,9 @@ crippled one — no `_catalog`, no referrers, no pagination — because that is 
 worst case the design must survive, and "degrades gracefully" is otherwise a claim
 rather than a property.
 
-For integration work:
-
-```bash
-podman run -d -p 5000:5000 ghcr.io/project-zot/zot-linux-amd64:latest  # OCI 1.1, referrers
-podman run -d -p 5001:5000 docker.io/library/registry:2                # minimal
-```
+For integration work, run the two registries above and point the provider at each in
+turn. A registry that answers the referrers API and one that only answers the `sha256-`
+fallback tag are both correct, and content must render identically against either.
 
 ## License
 

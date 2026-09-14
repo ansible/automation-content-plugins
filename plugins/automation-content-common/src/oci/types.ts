@@ -94,6 +94,18 @@ export interface RegistryConnection {
   repositories?: string[];
   /** Skip TLS verification. Local development only. */
   insecure?: boolean;
+  /**
+   * Rewrite the host of a bearer-auth realm to match this connection's host.
+   *
+   * Registries advertise their token endpoint using their own configured hostname. When
+   * that hostname is not reachable from the client — a registry configured as
+   * `localhost` but reached from inside a container, for example — the token exchange
+   * fails even though the registry itself is reachable.
+   *
+   * Off by default: redirecting where credentials are sent is security-sensitive and
+   * must be a deliberate choice, not a silent fallback.
+   */
+  rewriteAuthRealmHost?: boolean;
 }
 
 /**

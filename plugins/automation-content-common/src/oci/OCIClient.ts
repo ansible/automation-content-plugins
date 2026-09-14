@@ -1,3 +1,4 @@
+import { DigestCache, digestKey } from './DigestCache';
 import {
   ArtifactRef,
   Descriptor,
@@ -22,6 +23,11 @@ export interface OCIClientOptions {
   /** Per-request timeout. */
   timeoutMs?: number;
   logger?: { debug(msg: string): void; warn(msg: string): void };
+  /**
+   * Cache for digest-addressed reads only. Tag lookups are never cached — a tag is a
+   * mutable pointer, and caching one is how a catalog starts lying about an image.
+   */
+  cache?: DigestCache;
 }
 
 interface AuthChallenge {
@@ -44,6 +50,7 @@ export class OCIClient {
   private readonly fetchImpl: FetchLike;
   private readonly timeoutMs: number;
   private readonly logger?: OCIClientOptions['logger'];
+  private readonly cache?: DigestCache;
   /** Bearer tokens from the token-exchange flow, keyed by scope. */
   private readonly tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
@@ -54,6 +61,7 @@ export class OCIClient {
     this.fetchImpl = options.fetch ?? ((url, init) => fetch(url, init));
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.logger = options.logger;
+    this.cache = options.cache;
   }
 
   get registryName(): string {
@@ -101,6 +109,21 @@ export class OCIClient {
     if (cached && cached.expiresAt > Date.now()) return cached.token;
 
     const url = new URL(challenge.realm);
+
+    // The advertised realm host may be unreachable from here — a registry configured
+    // as `localhost` reached from inside a container, for instance. Only ever done
+    // when explicitly enabled, since this changes where credentials are sent.
+    if (this.connection.rewriteAuthRealmHost) {
+      const target = new URL(this.base);
+      if (url.host !== target.host) {
+        this.logger?.debug(
+          `[${this.connection.name}] rewriting auth realm host ${url.host} -> ${target.host}`,
+        );
+        url.protocol = target.protocol;
+        url.host = target.host;
+      }
+    }
+
     if (challenge.service) url.searchParams.set('service', challenge.service);
     if (challenge.scope) url.searchParams.set('scope', challenge.scope);
 
@@ -319,8 +342,23 @@ export class OCIClient {
     };
   }
 
-  /** `GET /v2/{name}/manifests/{ref}` — resolve a reference to a full artifact. */
+  /**
+   * `GET /v2/{name}/manifests/{ref}` — resolve a reference to a full artifact.
+   *
+   * Cached only when the reference is a digest. Resolving a *tag* must always hit the
+   * registry: that lookup is exactly how tag movement is detected.
+   */
   async getManifest(repository: string, reference: string): Promise<ResolvedArtifact> {
+    const byDigest = reference.startsWith('sha256:');
+    const key = byDigest
+      ? digestKey(this.connection.name, repository, 'manifest', reference)
+      : undefined;
+
+    if (key) {
+      const cached = this.cache?.get<ResolvedArtifact>(key);
+      if (cached) return cached;
+    }
+
     const res = await this.request(`/v2/${repository}/manifests/${reference}`, {
       headers: { Accept: MANIFEST_ACCEPT },
     });
@@ -340,7 +378,7 @@ export class OCIClient {
       res.headers.get('docker-content-digest') ??
       (reference.startsWith('sha256:') ? reference : '');
 
-    return {
+    const resolved: ResolvedArtifact = {
       registry: this.connection.name,
       repository,
       reference,
@@ -350,6 +388,8 @@ export class OCIClient {
       manifest,
       size: raw.length,
     };
+    if (key) this.cache?.set(key, resolved, raw.length);
+    return resolved;
   }
 
   /**
@@ -364,6 +404,11 @@ export class OCIClient {
     repository: string,
     configDescriptor: Descriptor,
   ): Promise<ImageConfig | undefined> {
+    const key = digestKey(
+      this.connection.name, repository, 'config', configDescriptor.digest);
+    const cached = this.cache?.get<ImageConfig>(key);
+    if (cached) return cached;
+
     const res = await this.request(
       `/v2/${repository}/blobs/${configDescriptor.digest}`,
       { headers: { Accept: configDescriptor.mediaType } },
@@ -375,7 +420,9 @@ export class OCIClient {
       return undefined;
     }
     try {
-      return (await res.json()) as ImageConfig;
+      const config = (await res.json()) as ImageConfig;
+      this.cache?.set(key, config, configDescriptor.size ?? 0);
+      return config;
     } catch {
       return undefined;
     }
@@ -441,6 +488,27 @@ export class OCIClient {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Fetch a blob by digest, cached.
+   *
+   * Used for layer payloads such as the content manifest. Immutable by digest, so an
+   * unchanged image never re-downloads its 374 KB inventory on a later sync.
+   */
+  async getBlob(repository: string, descriptor: Descriptor): Promise<Buffer | undefined> {
+    const key = digestKey(this.connection.name, repository, 'blob', descriptor.digest);
+    const cached = this.cache?.get<Buffer>(key);
+    if (cached) return cached;
+
+    const res = await this.request(`/v2/${repository}/blobs/${descriptor.digest}`, {
+      headers: { Accept: descriptor.mediaType },
+    });
+    if (!res.ok) return undefined;
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    this.cache?.set(key, buffer, buffer.length);
+    return buffer;
   }
 
   /** Build a pull reference a user can hand to podman. Portal never proxies this. */

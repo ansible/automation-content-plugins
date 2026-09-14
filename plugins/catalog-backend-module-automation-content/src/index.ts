@@ -3,3 +3,4 @@ export { OCIRegistryEntityProvider, Annotations } from './OCIRegistryEntityProvi
 export type { OCIRegistryEntityProviderOptions } from './OCIRegistryEntityProvider';
 export { readRegistryConfigs } from './config';
 export type { RegistryProviderEntry } from './config';
+export { defaultContentTypes } from './contentTypes';

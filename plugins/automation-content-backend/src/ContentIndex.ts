@@ -6,16 +6,29 @@ import {
 import {
   BackendCapabilities,
   CapabilityProbe,
-  Classification,
   DigestCacheStats,
   ImageManifest,
   MemoryDigestCache,
   OCIClient,
   RegistryConnection,
   UNKNOWN_IMAGE_TYPE,
-  classifyImage,
   readContentManifest,
 } from '@ansible/automation-content-common';
+import type {
+  ContentTypeRegistry,
+  Descriptor,
+  MetadataBundle,
+  ResolvedArtifact,
+} from '@ansible/automation-content-common';
+
+/** What the index concluded about an artifact, and why. */
+export interface IdentifiedType {
+  type: string;
+  signals: string[];
+  /** Whether the owning content type publishes a build-time content manifest. */
+  readsContentManifest: boolean;
+}
+import { CONTENT_MANIFEST_ARTIFACT_TYPE } from '@ansible/content-model';
 
 /**
  * A discovered artifact.
@@ -32,7 +45,7 @@ export interface IndexedArtifact {
   tags: string[];
   pullReference: string;
   contentsKnown: boolean;
-  classification: Classification;
+  classification: IdentifiedType;
   manifest?: AnsibleContentManifest;
 }
 
@@ -122,6 +135,7 @@ export class ContentIndex {
       warn(m: string): void;
       debug(m: string): void;
     },
+    private readonly contentTypes?: ContentTypeRegistry,
   ) {
     for (const connection of connections) {
       this.registries.set(connection.name, { connection });
@@ -489,9 +503,10 @@ export class ContentIndex {
     // Labels live in the config blob, which enumeration reads anyway — so classifying
     // by label costs nothing extra.
     let labels: Record<string, string> | undefined;
+    let resolved: ResolvedArtifact | undefined;
     try {
-      const artifact = await client.getManifest(repository, digest);
-      const config = (artifact.manifest as ImageManifest).config;
+      resolved = await client.getManifest(repository, digest);
+      const config = (resolved.manifest as ImageManifest).config;
       if (config) {
         const blob = await client.getConfigBlob(repository, config);
         labels = blob?.config?.Labels;
@@ -500,9 +515,13 @@ export class ContentIndex {
       this.logger.debug(`[${registry}] ${repository}@${digest}: ${String(error)}`);
     }
 
-    const classification = classifyImage({ labels, referrers });
+    const classification = this.identify(resolved, { labels, referrers });
 
-    if (classification.type !== 'execution-environment') {
+    // Only a type that publishes a build-time content manifest is read further. Gated
+    // on the declared media type rather than on a type name, so this stays a statement
+    // about capability: a future content type publishing the same manifest is read the
+    // same way, with no change here.
+    if (!classification.readsContentManifest) {
       this.logger.debug(
         `[${registry}] ${repository}:${tags.join(',')} classified as ` +
           `${classification.type} — ${classification.signals.join('; ')}`,
@@ -516,10 +535,54 @@ export class ContentIndex {
 
     return {
       ...base,
-      type: 'execution-environment',
+      type: classification.type,
       contentsKnown: Boolean(located?.manifest),
       classification,
       manifest: located?.manifest,
+    };
+  }
+
+  /**
+   * Ask the registered content types which one owns this artifact.
+   *
+   * The index knows no content type of its own. With an empty registry every artifact
+   * is reported as unidentified — honestly, with each adapter's reason — rather than
+   * silently dropped.
+   */
+  private identify(
+    artifact: ResolvedArtifact | undefined,
+    signalsFrom: { labels?: Record<string, string>; referrers?: Descriptor[] },
+  ): IdentifiedType {
+    if (!artifact || !this.contentTypes) {
+      return {
+        type: UNKNOWN_IMAGE_TYPE,
+        signals: ['no content types registered'],
+        readsContentManifest: false,
+      };
+    }
+
+    const meta: MetadataBundle = {
+      manifest: artifact.manifest,
+      config: signalsFrom.labels ? { config: { Labels: signalsFrom.labels } } : undefined,
+      referrers: signalsFrom.referrers,
+      obtained: ['manifest', 'config', 'referrers'],
+    };
+
+    const resolution = this.contentTypes.resolve(artifact, meta);
+    if (!resolution) {
+      return {
+        type: UNKNOWN_IMAGE_TYPE,
+        signals: this.contentTypes.explain(artifact, meta),
+        readsContentManifest: false,
+      };
+    }
+
+    return {
+      type: resolution.adapter.type,
+      signals: resolution.classification.signals,
+      readsContentManifest: resolution.adapter.mediaTypes.includes(
+        CONTENT_MANIFEST_ARTIFACT_TYPE,
+      ),
     };
   }
 

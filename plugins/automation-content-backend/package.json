@@ -28,6 +28,8 @@
   "dependencies": {
     "@ansible/automation-content-common": "workspace:^",
     "@ansible/content-model": "workspace:^",
+    "@ansible/content-type-execution-environment": "workspace:^",
+    "@ansible/content-type-helm-chart": "workspace:^",
     "@ansible/plugin-catalog-backend-module-automation-content": "workspace:^",
     "@backstage/backend-plugin-api": "^1.10.0",
     "express": "^4.21.0",

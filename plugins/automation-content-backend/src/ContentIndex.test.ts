@@ -1,3 +1,4 @@
+import { defaultContentTypes } from '@ansible/plugin-catalog-backend-module-automation-content';
 import {
   MockRegistry,
   RegistryConnection,
@@ -26,7 +27,7 @@ function connection(): RegistryConnection {
  * one, because tag propagation is eventually consistent.
  */
 function indexOver(registry: MockRegistry): ContentIndex {
-  const index = new ContentIndex([connection()], silent);
+  const index = new ContentIndex([connection()], silent, defaultContentTypes());
   const clients = (index as unknown as { clients: Map<string, { fetchImpl: unknown }> })
     .clients;
   const client = clients.get('mock')!;

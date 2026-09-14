@@ -3,6 +3,7 @@ import {
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
 import { readRegistryConfigs } from '@ansible/plugin-catalog-backend-module-automation-content';
+import { defaultContentTypes } from '@ansible/plugin-catalog-backend-module-automation-content';
 import { ContentIndex } from './ContentIndex';
 import { createRouter } from './router';
 
@@ -26,11 +27,17 @@ export const automationContentPlugin = createBackendPlugin({
       async init({ config, logger, httpRouter, scheduler }) {
         const registries = readRegistryConfigs(config).map(r => r.connection);
 
-        const index = new ContentIndex(registries, {
-          info: (m: string) => logger.info(m),
-          warn: (m: string) => logger.warn(m),
-          debug: (m: string) => logger.debug(m),
-        });
+        const index = new ContentIndex(
+          registries,
+          {
+            info: (m: string) => logger.info(m),
+            warn: (m: string) => logger.warn(m),
+            debug: (m: string) => logger.debug(m),
+          },
+          // Same registry as the catalog provider uses, so the API and the catalog can
+          // never disagree about what an artifact is.
+          defaultContentTypes(),
+        );
 
         httpRouter.use(await createRouter({ index, logger }));
 

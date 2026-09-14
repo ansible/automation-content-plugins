@@ -6,15 +6,22 @@ import {
 } from '@backstage/plugin-catalog-node';
 import {
   CapabilityProbe,
-  Classification,
+  ContentTypeRegistry,
   ImageManifest,
+  MetadataBundle,
+  FetchLike,
   OCIClient,
   RegistryConnection,
-  classifyImage,
+  Resolution,
+  UNKNOWN_IMAGE_TYPE,
   readContentManifest,
   BackendCapabilities,
 } from '@ansible/automation-content-common';
-import { AnsibleContentManifest, summariseManifest } from '@ansible/content-model';
+import {
+  AnsibleContentManifest,
+  CONTENT_MANIFEST_ARTIFACT_TYPE,
+  summariseManifest,
+} from '@ansible/content-model';
 
 export const ANNOTATION_PREFIX = 'ansible.com';
 
@@ -23,6 +30,25 @@ export const ANNOTATION_PREFIX = 'ansible.com';
  * without a referrers endpoint. They address artifacts *about* an image, not images.
  */
 const REFERRER_TAG = /^sha256-[0-9a-f]{64}$/;
+
+/**
+ * Whether the adapter that claimed this artifact reads a build-time content manifest.
+ *
+ * The provider renders rich sub-entities — a component per collection — only for such
+ * types. Gated on a *declared media type* rather than on a type name, so it stays a
+ * statement about capability rather than about identity, and a future content type that
+ * publishes the same manifest gets the same treatment without editing this file.
+ *
+ * This is the last EE-shaped assumption in the provider. It survives because the
+ * universal Enumeration is flat — `collections: ContentRef[]`, `plugins: PluginDoc[]` —
+ * while these entities need the per-collection nesting the raw manifest carries. Making
+ * this fully generic is a change to the content model, not to this file.
+ */
+function declaresContentManifest(identified: Identified): boolean {
+  return Boolean(
+    identified.resolution?.adapter.mediaTypes.includes(CONTENT_MANIFEST_ARTIFACT_TYPE),
+  );
+}
 
 /** Location type used for entities discovered in a registry. */
 const LOCATION_TYPE = 'oci-registry';
@@ -56,6 +82,24 @@ export interface OCIRegistryEntityProviderOptions {
   owner?: string;
   /** System entities are grouped under. */
   system?: string;
+  /**
+   * Which content types this provider can recognise.
+   *
+   * The provider itself knows none: an empty registry discovers artifacts and reports
+   * every one as unidentified. Registering types is the composition root's job, which
+   * is what makes adding one a matter of installing a package rather than editing this
+   * file.
+   */
+  contentTypes?: ContentTypeRegistry;
+  /** Injected transport. Tests drive the provider against a mock registry with it. */
+  fetch?: FetchLike;
+}
+
+/** What discovery concluded about one artifact. */
+interface Identified {
+  type: string;
+  signals: string[];
+  resolution?: Resolution;
 }
 
 /**
@@ -81,6 +125,7 @@ export class OCIRegistryEntityProvider implements EntityProvider {
 
   constructor(private readonly options: OCIRegistryEntityProviderOptions) {
     this.client = new OCIClient(options.connection, {
+      fetch: options.fetch,
       logger: {
         debug: (msg: string) => options.logger.debug(msg),
         warn: (msg: string) => options.logger.warn(msg),
@@ -207,12 +252,11 @@ export class OCIRegistryEntityProvider implements EntityProvider {
       // Only an image actually identified as an execution environment gets enumerated.
       // Anything else is still catalogued — honestly, as an unrecognised image — rather
       // than presented as an empty environment.
-      const found =
-        classification.type === 'execution-environment'
-          ? await readContentManifest(this.client, repository, digest).catch(
-              () => undefined,
-            )
-          : undefined;
+      const found = declaresContentManifest(classification)
+        ? await readContentManifest(this.client, repository, digest).catch(
+            () => undefined,
+          )
+        : undefined;
 
       entities.push(
         this.toExecutionEnvironment(
@@ -239,28 +283,50 @@ export class OCIRegistryEntityProvider implements EntityProvider {
    * images built long before content manifests existed. The labels live in the config
    * blob, which enumeration reads anyway — classification costs no extra requests.
    */
-  private async classify(
-    repository: string,
-    digest: string,
-  ): Promise<Classification> {
+  private async classify(repository: string, digest: string): Promise<Identified> {
+    const registry = this.options.contentTypes;
+
     const { referrers } = await this.client
       .getReferrers(repository, digest)
       .catch(() => ({ referrers: [], via: 'none' as const }));
 
-    let labels: Record<string, string> | undefined;
+    let artifact;
+    let config;
     try {
-      const artifact = await this.client.getManifest(repository, digest);
-      const config = (artifact.manifest as ImageManifest).config;
-      if (config) {
-        const blob = await this.client.getConfigBlob(repository, config);
-        labels = blob?.config?.Labels;
+      artifact = await this.client.getManifest(repository, digest);
+      const descriptor = (artifact.manifest as ImageManifest).config;
+      if (descriptor) {
+        config = await this.client.getConfigBlob(repository, descriptor);
       }
     } catch (error) {
       this.options.logger.debug(
         `[${this.options.connection.name}] ${repository}@${digest}: ${String(error)}`,
       );
     }
-    return classifyImage({ labels, referrers });
+
+    if (!artifact || !registry) {
+      return { type: UNKNOWN_IMAGE_TYPE, signals: ['no content types registered'] };
+    }
+
+    const meta: MetadataBundle = {
+      manifest: artifact.manifest,
+      config,
+      referrers,
+      obtained: ['manifest', 'config', 'referrers'],
+    };
+
+    const resolution = registry.resolve(artifact, meta);
+    if (resolution) {
+      return {
+        type: resolution.adapter.type,
+        signals: resolution.classification.signals,
+        resolution,
+      };
+    }
+
+    // Nobody claimed it. Still catalogued, with every adapter's reason recorded, so an
+    // operator can see why rather than wondering where the image went.
+    return { type: UNKNOWN_IMAGE_TYPE, signals: registry.explain(artifact, meta) };
   }
 
   private entityName(parts: string[]): string {
@@ -273,7 +339,7 @@ export class OCIRegistryEntityProvider implements EntityProvider {
     repository: string,
     digest: string,
     tags: string[],
-    classification: Classification,
+    classification: Identified,
     manifest?: AnsibleContentManifest,
   ): Entity {
     const { connection: registry, owner = 'unknown', system } = this.options;
@@ -315,7 +381,7 @@ export class OCIRegistryEntityProvider implements EntityProvider {
       annotations[Annotations.contentCounts] = JSON.stringify(summary);
     }
 
-    const isEE = classification.type === 'execution-environment';
+    const isEE = declaresContentManifest(classification);
     const description = summary
       ? `Execution environment with ${summary.collections} collections, ` +
         `${summary.plugins} plugins, ${summary.edaPlugins} EDA plugins ` +
@@ -335,7 +401,7 @@ export class OCIRegistryEntityProvider implements EntityProvider {
         description,
         annotations,
         tags: [
-          isEE ? 'execution-environment' : 'oci-image',
+          classification.type,
           ...(summary ? [] : ['contents-unknown']),
         ],
         links: [

@@ -26,15 +26,20 @@ export type {
 
 export {
   ContentTypeRegistry,
+  UNKNOWN_IMAGE_TYPE,
 } from './adapters/ContentTypeAdapter';
 export type {
   ContentTypeAdapter,
+  Classification,
   Confidence,
+  Resolution,
   EnumerationContext,
   UpdatePolicy,
   PolicyAdapter,
   IntegrityStrategy,
 } from './adapters/ContentTypeAdapter';
+
+export { OCIBackendAdapter } from './adapters/OCIBackendAdapter';
 
 export { NullSigningProvider } from './adapters/SigningProvider';
 export type {
@@ -53,13 +58,6 @@ export {
 } from './oci/contentManifestReader';
 export type { ContentManifestLocation } from './oci/contentManifestReader';
 
-export {
-  classifyImage,
-  EE_LABEL,
-  CONTENT_MANIFEST_LABEL,
-  UNKNOWN_IMAGE_TYPE,
-} from './adapters/classify';
-export type { Classification, ClassificationInput } from './adapters/classify';
 export { decodeLayerPayload } from './oci/contentManifestReader';
 
 export { MemoryDigestCache, digestKey } from './oci/DigestCache';

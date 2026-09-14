@@ -6,8 +6,37 @@ import type {
 import type { BackendCapabilities, MetadataBundle, ResolvedArtifact } from '../oci/types';
 import type { BackendAdapter } from './BackendAdapter';
 
+/**
+ * Content type used for an artifact no adapter claimed.
+ *
+ * Not an error and not a reason to drop it. "An artifact we do not understand" and "no
+ * artifact" are different facts, and silently hiding the former makes a registry look
+ * emptier than it is.
+ */
+export const UNKNOWN_IMAGE_TYPE = 'oci-image';
+
 /** Confidence that an artifact is of a given content type. */
 export type Confidence = 'certain' | 'likely' | 'no';
+
+/**
+ * The outcome of asking one adapter whether an artifact is its own.
+ *
+ * `signals` is not decoration. An operator looking at a registry full of images needs
+ * to know *why* something was or was not recognised — "no ansible-execution-environment
+ * label, no content-manifest referrer" is actionable, where a bare verdict is not. It
+ * is part of the contract so that every content type has to answer the question.
+ */
+export interface Classification {
+  confidence: Confidence;
+  /** Which signals fired, in the adapter's own words. */
+  signals: string[];
+}
+
+/** Which adapter claimed an artifact, and on what evidence. */
+export interface Resolution {
+  adapter: ContentTypeAdapter;
+  classification: Classification;
+}
 
 export interface EnumerationContext {
   /** What the backend can do — gates which ladder rungs are reachable. */
@@ -74,8 +103,15 @@ export interface ContentTypeAdapter<T extends ContentObject = ContentObject> {
   /** Media types or artifact types this adapter claims. */
   readonly mediaTypes: string[];
 
-  /** Does this artifact belong to me? */
-  identify(ref: ResolvedArtifact, meta: MetadataBundle): Confidence;
+  /**
+   * Does this artifact belong to me, and on what evidence?
+   *
+   * Must be answerable from metadata discovery has already fetched. An adapter that
+   * needs its own round trips to answer makes classification cost scale with the
+   * number of registered content types, which is how an extensible design becomes an
+   * unusable one.
+   */
+  identify(ref: ResolvedArtifact, meta: MetadataBundle): Classification;
 
   /** Produce the universal object. The only place a ContentObject is constructed. */
   normalize(ref: ResolvedArtifact, meta: MetadataBundle): Promise<T>;
@@ -122,17 +158,35 @@ export class ContentTypeRegistry {
     return [...this.adapters.values()];
   }
 
-  /** Pick the best adapter for an artifact, preferring certainty over likelihood. */
-  resolve(
-    ref: ResolvedArtifact,
-    meta: MetadataBundle,
-  ): ContentTypeAdapter | undefined {
-    let likely: ContentTypeAdapter | undefined;
+  /**
+   * Pick the best adapter for an artifact, preferring certainty over likelihood.
+   *
+   * Returns undefined when nothing claims it. That is a first-class outcome: an image
+   * nobody recognises is a fact worth reporting, not an error and not something to
+   * hide. Callers render it as an unidentified artifact, with the signals explaining
+   * why every adapter declined.
+   */
+  resolve(ref: ResolvedArtifact, meta: MetadataBundle): Resolution | undefined {
+    let likely: Resolution | undefined;
     for (const adapter of this.adapters.values()) {
-      const confidence = adapter.identify(ref, meta);
-      if (confidence === 'certain') return adapter;
-      if (confidence === 'likely' && !likely) likely = adapter;
+      const classification = adapter.identify(ref, meta);
+      if (classification.confidence === 'certain') return { adapter, classification };
+      if (classification.confidence === 'likely' && !likely) {
+        likely = { adapter, classification };
+      }
     }
     return likely;
+  }
+
+  /**
+   * Why no adapter claimed an artifact, gathered from every registered type.
+   *
+   * Kept separate from `resolve` because it is only needed on the unrecognised path,
+   * and asking every adapter to explain itself is wasted work on the common one.
+   */
+  explain(ref: ResolvedArtifact, meta: MetadataBundle): string[] {
+    return [...this.adapters.values()].flatMap(adapter =>
+      adapter.identify(ref, meta).signals.map(signal => `${adapter.type}: ${signal}`),
+    );
   }
 }

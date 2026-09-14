@@ -2,6 +2,7 @@ import { coreServices, createBackendModule } from '@backstage/backend-plugin-api
 import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node';
 import { OCIRegistryEntityProvider } from './OCIRegistryEntityProvider';
 import { readRegistryConfigs } from './config';
+import { defaultContentTypes } from './contentTypes';
 
 /**
  * Registers an entity provider per configured OCI registry.
@@ -28,9 +29,12 @@ export const catalogModuleAutomationContent = createBackendModule({
           return;
         }
 
+        const contentTypes = defaultContentTypes();
+
         for (const { connection, schedule, owner, system } of registries) {
           const provider = new OCIRegistryEntityProvider({
             connection,
+            contentTypes,
             logger,
             owner,
             system,

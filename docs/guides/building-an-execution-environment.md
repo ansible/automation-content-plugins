@@ -15,30 +15,44 @@ resolves documentation fragments, plugin loading and argument specs differently.
 output can be quietly wrong. See
 [ADR-002](../../.sdlc/adrs/002-build-time-content-manifest.md).
 
-## You need a patched ansible-builder
+## Prerequisite: a patched ansible-builder
 
-Manifest generation and publishing are not in upstream `ansible-builder` yet. Until they
-land, build from this branch:
+**Manifest generation and publishing are not in upstream `ansible-builder`.** Without
+them there is no manifest to publish, and every execution environment reports its
+contents as unknown. Until the change lands upstream, build from this fork:
 
 | | |
 |---|---|
 | Repository | `https://github.com/ganeshrn/ansible-builder` |
-| Branch | `move-changes-from-ansible-builder` |
+| Branch | **`move-changes-from-ansible-builder`** |
 
 ```bash
 git clone -b move-changes-from-ansible-builder \
   https://github.com/ganeshrn/ansible-builder.git
 cd ansible-builder
-pip install -e .            # needs Python 3.11+
+pip install -e .            # needs Python 3.11 or newer
 ansible-builder --version
+ansible-builder publish --help    # absent on upstream: confirms you have the fork
 ```
 
-It adds two things to `ansible-builder`:
+A virtualenv is worth it — this shadows any `ansible-builder` already installed:
 
-- **`ansible-builder build`** generates the manifest inside the final image and writes it
-  to `/usr/share/ansible/content-manifest.json`. On by default for schema v3.
-- **`ansible-builder publish`** pushes the image, then publishes that manifest as an OCI
-  referrer of it.
+```bash
+python3 -m venv ~/.venvs/ansible-builder-content
+source ~/.venvs/ansible-builder-content/bin/activate
+pip install -e .
+```
+
+It adds two things:
+
+- **`ansible-builder build`** generates the manifest inside the final image, using that
+  image's own `ansible-core`, and writes it to
+  `/usr/share/ansible/content-manifest.json`. On by default for schema v3 — no flag
+  needed.
+- **`ansible-builder publish`** pushes the image, then publishes that manifest beside it
+  as an OCI referrer, so a consumer can read it without pulling the image.
+
+Both are additive: everything upstream `ansible-builder` does, it still does.
 
 ## Define the EE
 

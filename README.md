@@ -14,6 +14,14 @@ Mounted in Automation Portal at **`/automation-content`**.
 
 From a fresh clone to content on screen. About ten minutes, most of it waiting.
 
+**You need:** Node 22 or 24 with Yarn 4 (`corepack enable`), and Podman.
+
+To see what is *inside* an execution environment — collections, modules, plugins,
+documentation — you also need a patched `ansible-builder`, because manifest generation
+and publishing are not upstream yet. That is step 6, and
+[its guide](docs/guides/building-an-execution-environment.md) covers it. Steps 1–5 work
+without it.
+
 **1. Install**
 
 ```bash
@@ -55,17 +63,35 @@ yarn workspace backend start          # http://127.0.0.1:7007
 **5. Sync and look**
 
 ```bash
-node tools/sync-once.mjs local-registry
-node tools/show-catalog.mjs
+node tools/sync-once.mjs local-registry     # discover now, rather than waiting
+node tools/verify-levels.mjs                # walk what it found
+node tools/show-catalog.mjs                 # the same content as catalog entities
 ```
 
 You should see the image catalogued with its contents reported as **unknown** — correct,
 because it has no content manifest, and the state most images in the field are in.
 
+`sync-once` refreshes the content API immediately. Catalog *entities* are written by a
+separate scheduled provider that first runs a few seconds after startup, so give
+`show-catalog` a moment if it comes back empty.
+
 **6. Get the full inventory**
 
-To see collections, modules, plugins and documentation, build an EE that carries a
-build-time content manifest:
+Turning "contents unknown" into collections, modules, plugins and documentation needs an
+EE that carries a build-time content manifest, published to the registry as an OCI
+referrer. That needs the patched `ansible-builder`:
+
+```bash
+git clone -b move-changes-from-ansible-builder \
+  https://github.com/ganeshrn/ansible-builder.git
+cd ansible-builder && pip install -e .        # Python 3.11+
+
+ansible-builder build   -t localhost:8080/demo/network-ee:dev --container-runtime podman
+ansible-builder publish    localhost:8080/demo/network-ee:dev --insecure
+```
+
+Full walkthrough, including the EE definition and why generation happens inside the
+image:
 **[docs/guides/building-an-execution-environment.md](docs/guides/building-an-execution-environment.md)**.
 
 That is the standalone harness. For the real portal — RHDH, dynamic plugin loading, the

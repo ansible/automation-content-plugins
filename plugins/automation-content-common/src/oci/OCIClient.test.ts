@@ -302,3 +302,105 @@ describe('pullReference', () => {
     ).toBe('mock.registry/ansible/ee@sha256:abc');
   });
 });
+
+describe('auth priming', () => {
+  /**
+   * A registry that accepts Bearer only on /v2/, as Quay does.
+   *
+   * Presenting Basic there earns 400 with no WWW-Authenticate header, so a client that
+   * sends credentials eagerly never learns where to exchange them and fails every
+   * request. This was not hypothetical: it broke discovery against a local Quay, and
+   * the symptom was "tag listing failed: 400" with no hint of the cause.
+   */
+  function bearerOnlyRegistry() {
+    const seen: Array<{ path: string; auth: string | undefined }> = [];
+    const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
+      const path = new URL(url).pathname + new URL(url).search;
+      const auth = init?.headers?.Authorization;
+      seen.push({ path, auth });
+
+      const reply = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+        new Response(JSON.stringify(body), { status, headers });
+
+      if (path.startsWith('/v2/auth')) {
+        return auth?.startsWith('Basic ')
+          ? reply(200, { token: 'issued-token' })
+          : reply(401, { error: 'auth required' });
+      }
+      if (!auth) {
+        return reply(401, {}, {
+          'www-authenticate': 'Bearer realm="https://mock.registry/v2/auth",service="quay"',
+        });
+      }
+      if (!auth.startsWith('Bearer ')) {
+        return reply(400, { error: 'Invalid bearer token format' });
+      }
+      return reply(200, { name: 'demo/ee', tags: ['dev'] });
+    };
+    return { seen, fetchImpl: fetchImpl as never };
+  }
+
+  it('primes /v2/ without credentials', async () => {
+    const { seen, fetchImpl } = bearerOnlyRegistry();
+    const client = new OCIClient(
+      connection({ auth: { type: 'basic', username: 'u', password: 'p' } }),
+      { fetch: fetchImpl },
+    );
+
+    await client.request('/v2/demo/ee/tags/list');
+
+    const prime = seen.find(r => r.path === '/v2/');
+    expect(prime).toBeDefined();
+    expect(prime?.auth).toBeUndefined();
+  });
+
+  it('reaches a bearer-only registry that rejects Basic outright', async () => {
+    const { seen, fetchImpl } = bearerOnlyRegistry();
+    const client = new OCIClient(
+      connection({ auth: { type: 'basic', username: 'u', password: 'p' } }),
+      { fetch: fetchImpl },
+    );
+
+    const res = await client.request('/v2/demo/ee/tags/list');
+
+    expect(res.status).toBe(200);
+    // Basic is legitimate at the token endpoint and nowhere else: carrying it to any
+    // other /v2/ path is what earns the 400.
+    const misuse = seen.filter(
+      r => !r.path.startsWith('/v2/auth') && r.auth?.startsWith('Basic '),
+    );
+    expect(misuse).toEqual([]);
+  });
+
+  it('primes once, not per request', async () => {
+    const { seen, fetchImpl } = bearerOnlyRegistry();
+    const client = new OCIClient(
+      connection({ auth: { type: 'basic', username: 'u', password: 'p' } }),
+      { fetch: fetchImpl },
+    );
+
+    await Promise.all([
+      client.request('/v2/demo/ee/tags/list'),
+      client.request('/v2/demo/ee/tags/list'),
+    ]);
+
+    expect(seen.filter(r => r.path === '/v2/')).toHaveLength(1);
+  });
+
+  it('ping observes the challenge rather than suppressing it', async () => {
+    // The probe exists to read the auth scheme. Sending credentials is what hides it:
+    // the registry answers 400 instead of challenging, and the probe concludes
+    // "anonymous" about a registry that requires a token.
+    const { seen, fetchImpl } = bearerOnlyRegistry();
+    const client = new OCIClient(
+      connection({ auth: { type: 'basic', username: 'u', password: 'p' } }),
+      { fetch: fetchImpl },
+    );
+
+    const result = await client.ping();
+
+    expect(result.status).toBe(401);
+    expect(result.challenge).toContain('Bearer');
+    expect(seen.every(r => r.auth === undefined)).toBe(true);
+  });
+});

@@ -53,6 +53,8 @@ export class OCIClient {
   private readonly cache?: DigestCache;
   /** Bearer tokens from the token-exchange flow, keyed by scope. */
   private readonly tokenCache = new Map<string, { token: string; expiresAt: number }>();
+  /** Shared so concurrent requests prime once rather than racing. */
+  private priming?: Promise<void>;
 
   constructor(
     private readonly connection: RegistryConnection,
@@ -161,6 +163,52 @@ export class OCIClient {
   }
 
   /**
+   * Acquire a token before the first real request, priming from `/v2/`.
+   *
+   * Sent **anonymously**, on purpose. Quay's `/v2/` accepts Bearer tokens only:
+   * presenting Basic credentials there earns `400 Invalid bearer token format` rather
+   * than a challenge, and a 400 carries no `WWW-Authenticate` header to learn from — so
+   * sending credentials eagerly is exactly what prevents this client from discovering
+   * where to exchange them. Priming anonymously is what podman does.
+   *
+   * Registries are also inconsistent about *where* they challenge: Quay challenges on
+   * `/v2/` but can answer a bare 401 with no challenge on repository paths, so a client
+   * that waits to be challenged by its first real request may never learn the realm.
+   *
+   * Runs once per client; the result is shared by every later request.
+   */
+  private async primeAuth(): Promise<void> {
+    if (!this.priming) {
+      this.priming = (async () => {
+        try {
+          const res = await this.withTimeout(signal =>
+            this.fetchImpl(`${this.base}/v2/`, { headers: {}, signal } as never),
+          );
+          if (res.status !== 401) return; // anonymous access, or an unexpected answer
+          const header = res.headers.get('www-authenticate');
+          const challenge = header ? OCIClient.parseChallenge(header) : undefined;
+          if (challenge) await this.fetchBearerToken(challenge);
+        } catch (error) {
+          // Priming is best effort. A registry that cannot be reached here will fail
+          // the real request too, with a better message than this one could give.
+          this.logger?.debug(
+            `[${this.connection.name}] auth priming skipped: ${String(error)}`,
+          );
+        }
+      })();
+    }
+    return this.priming;
+  }
+
+  /** A token acquired by priming, if any, regardless of scope. */
+  private primedToken(): string | undefined {
+    for (const entry of this.tokenCache.values()) {
+      if (entry.expiresAt > Date.now()) return entry.token;
+    }
+    return undefined;
+  }
+
+  /**
    * Issue a request, transparently handling a 401 bearer challenge.
    *
    * Registries differ in whether they challenge per-endpoint or per-scope, so the retry
@@ -173,7 +221,12 @@ export class OCIClient {
     const url = path.startsWith('http') ? path : `${this.base}${path}`;
     const headers: Record<string, string> = { ...(init.headers ?? {}) };
 
-    const staticAuth = this.staticAuthHeader();
+    await this.primeAuth();
+
+    // A primed bearer token wins over static credentials: a registry that issued one
+    // is a registry that wants to be addressed with it.
+    const primed = this.primedToken();
+    const staticAuth = primed ? `Bearer ${primed}` : this.staticAuthHeader();
     if (staticAuth) headers.Authorization = staticAuth;
 
     let res = await this.withTimeout(signal =>
@@ -239,11 +292,16 @@ export class OCIClient {
    */
   async rawRequest(
     path: string,
-    init: { method?: string; headers?: Record<string, string> } = {},
+    init: {
+      method?: string;
+      headers?: Record<string, string>;
+      /** Set false to send no credentials — required when observing a challenge. */
+      auth?: boolean;
+    } = {},
   ): Promise<Response> {
     const url = path.startsWith('http') ? path : `${this.base}${path}`;
     const headers: Record<string, string> = { ...(init.headers ?? {}) };
-    const staticAuth = this.staticAuthHeader();
+    const staticAuth = init.auth === false ? undefined : this.staticAuthHeader();
     if (staticAuth) headers.Authorization = staticAuth;
     return this.withTimeout(signal =>
       this.fetchImpl(url, { ...init, headers, signal } as never),
@@ -255,7 +313,12 @@ export class OCIClient {
    * scheme. Uses `rawRequest` so the challenge survives for the caller to inspect.
    */
   async ping(): Promise<{ ok: boolean; status: number; challenge?: string }> {
-    const res = await this.rawRequest('/v2/');
+    // Anonymously, on purpose. This call exists to observe the authentication
+    // challenge, and presenting credentials is precisely what suppresses it: Quay
+    // answers Basic-on-/v2/ with `400 Invalid bearer token format` and no
+    // WWW-Authenticate header, so a probe that authenticates learns nothing and
+    // reports the registry as anonymous.
+    const res = await this.rawRequest('/v2/', { auth: false });
     return {
       ok: res.ok || res.status === 401,
       status: res.status,

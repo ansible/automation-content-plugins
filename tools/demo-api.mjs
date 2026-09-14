@@ -60,24 +60,41 @@ for (const c of collections) {
     `rulebooks=${String(c.counts.rulebooks).padStart(2)}`);
 }
 
-h('GET /plugins?q=vlan&type=module — agent asking what exists');
-const vlanSearch = await get('/plugins?q=vlan&type=module&limit=6');
-console.log(`${vlanSearch.totalItems} matches`);
-for (const i of vlanSearch.items) {
+h('GET /plugins?type=module — agent asking what exists');
+const moduleSearch = await get('/plugins?type=module&limit=6');
+console.log(`${moduleSearch.totalItems} modules`);
+for (const i of moduleSearch.items) {
   console.log(`  ${i.fqcn.padEnd(30)} ${i.shortDescription ?? ''}`);
 }
 
-h('GET /plugins/cisco.ios.ios_vlans — full argument spec for grounding');
-const vlans = await get('/plugins/cisco.ios.ios_vlans');
-console.log(`${vlans.fqcn}  (${vlans.type}, added ${vlans.versionAdded})`);
+// Pick a module that is actually present rather than naming one. This script has to
+// work against whatever an environment happens to contain — hardcoding a plugin makes
+// it a demo of one specific image instead of a demo of the API. Prefer one with nested
+// suboptions, since that is the part worth showing.
+const candidates = (await get('/plugins?type=module&limit=100')).items;
+let chosen;
+for (const c of candidates) {
+  const full = await get(`/plugins/${c.fqcn}`).catch(() => undefined);
+  if (!full) continue;
+  const hasNested = Object.values(full.options ?? {}).some(o => o?.suboptions);
+  if (hasNested) { chosen = full; break; }
+  chosen ??= full;
+}
+if (!chosen) {
+  console.log('\nNo modules discovered — is anything synced? Try: node tools/sync-once.mjs');
+  process.exit(0);
+}
+
+h(`GET /plugins/${chosen.fqcn} — full argument spec for grounding`);
+const vlans = chosen;
+console.log(`${vlans.fqcn}  (${vlans.type}${vlans.versionAdded ? `, added ${vlans.versionAdded}` : ''})`);
 console.log(`  ${vlans.shortDescription}`);
 console.log(`  collection:  ${vlans.collection} ${vlans.collectionVersion}`);
 console.log(`  provenance:  ${vlans.enumeration.source}, ansible-core ${vlans.enumeration.ansibleCore}`);
 console.log(`  options:     ${Object.keys(vlans.options ?? {}).join(', ')}`);
-const state = vlans.options?.state;
-console.log(`  state.choices: ${(state?.choices ?? []).join(' | ')}   default=${state?.default}`);
-const sub = vlans.options?.config?.suboptions ?? {};
-console.log(`  config.suboptions (${Object.keys(sub).length}):`);
+const nested = Object.entries(vlans.options ?? {}).find(([, o]) => o?.suboptions);
+const sub = nested?.[1]?.suboptions ?? {};
+console.log(`  ${nested?.[0] ?? 'nested'}.suboptions (${Object.keys(sub).length}):`);
 for (const [k, v] of Object.entries(sub).slice(0, 6)) {
   console.log(`      ${k.padEnd(14)} type=${v.type ?? '?'}${v.choices ? `  choices=${v.choices.join('|')}` : ''}`);
 }
@@ -89,11 +106,13 @@ console.log(`${eda.totalItems} event sources`);
 for (const i of eda.items) console.log(`  ${i.fqcn.padEnd(32)} ${i.shortDescription ?? ''}`);
 
 h('POST /resolve/requirements — which EE can run this project?');
+// One collection that is present and one that deliberately is not, whatever the
+// environment happens to hold — the unsatisfied half is the interesting half.
+const present = collections[0]?.fqcn ?? 'ansible.utils';
 const resolution = await post('/resolve/requirements', {
   collections: [
-    { name: 'cisco.ios', version: '*' },
-    { name: 'ansible.netcommon', version: '*' },
-    { name: 'community.mysql', version: '*' },
+    { name: present, version: '*' },
+    { name: 'community.definitely-not-installed', version: '*' },
   ],
 });
 console.log(`satisfiedBy: ${resolution.satisfiedBy.length}`);

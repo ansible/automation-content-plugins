@@ -1,0 +1,53 @@
+app:
+  title: Automation Content
+  baseUrl: http://127.0.0.1:3000
+
+organization:
+  name: Ansible
+
+backend:
+  baseUrl: http://127.0.0.1:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://127.0.0.1:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    # A file, not ':memory:'. With an in-memory SQLite database each pooled connection
+    # gets its own separate database, so writes and reads land in different places and
+    # the catalog silently appears empty.
+    connection:
+      directory: ./.data
+  auth:
+    # Local PoC only. Lets the catalog API be read without a token so the provider's
+    # output can be inspected directly. Never set this in a deployed portal.
+    dangerouslyDisableDefaultAuthPolicy: true
+
+auth:
+  providers:
+    guest: {}
+
+catalog:
+  # Nothing is read from disk: every entity comes from the registry provider below.
+  locations: []
+
+  providers:
+    automationContent:
+      owner: group:default/ansible
+      registries:
+        - name: local-quay
+          url: ${CONTENT_REGISTRY_URL}
+          # This Quay has catalog enumeration disabled, so repositories are listed
+          # explicitly. The capability probe reports it, and the provider degrades
+          # to the configured list rather than failing.
+          repositories:
+            - demo/network-ee
+          insecure: true
+          auth:
+            type: basic
+            username: ${CONTENT_REGISTRY_USERNAME}
+            password: ${CONTENT_REGISTRY_PASSWORD}

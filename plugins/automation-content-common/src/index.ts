@@ -45,3 +45,26 @@ export type {
   VerificationResult,
   PortableSignature,
 } from './adapters/SigningProvider';
+
+export {
+  readContentManifest,
+  decodeManifestBlob,
+  extractFromTar,
+} from './oci/contentManifestReader';
+export type { ContentManifestLocation } from './oci/contentManifestReader';
+
+export {
+  classifyImage,
+  EE_LABEL,
+  CONTENT_MANIFEST_LABEL,
+  UNKNOWN_IMAGE_TYPE,
+} from './adapters/classify';
+export type { Classification, ClassificationInput } from './adapters/classify';
+export { decodeLayerPayload } from './oci/contentManifestReader';
+
+export { MemoryDigestCache, digestKey } from './oci/DigestCache';
+export type { DigestCache, DigestCacheStats, MemoryDigestCacheOptions } from './oci/DigestCache';
+
+// Test helpers, exported so consumers can drive discovery without a live registry.
+export { MockRegistry, makeImage, makeLabelledImage } from './testing/MockRegistry';
+export type { MockImage, MockRegistryOptions } from './testing/MockRegistry';

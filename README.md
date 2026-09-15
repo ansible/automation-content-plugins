@@ -27,9 +27,8 @@ Manifest generation and publishing are not in upstream `ansible-builder`, so bui
 the fork:
 
 ```bash
-git clone -b move-changes-from-ansible-builder \
-  https://github.com/ganeshrn/ansible-builder.git
-cd ansible-builder
+git clone https://github.com/ganeshrn/ansible-builder.git
+cd ansible-builder                     # devel is the default branch, and has the change
 pip install -e .                       # Python 3.11+; a virtualenv is worth it
 ansible-builder publish --help         # absent upstream: confirms you have the fork
 

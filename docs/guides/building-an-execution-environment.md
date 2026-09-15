@@ -24,11 +24,10 @@ contents as unknown. Until the change lands upstream, build from this fork:
 | | |
 |---|---|
 | Repository | `https://github.com/ganeshrn/ansible-builder` |
-| Branch | **`move-changes-from-ansible-builder`** |
+| Branch | **`devel`** — the fork's default, so a plain clone gets it |
 
 ```bash
-git clone -b move-changes-from-ansible-builder \
-  https://github.com/ganeshrn/ansible-builder.git
+git clone https://github.com/ganeshrn/ansible-builder.git
 cd ansible-builder
 pip install -e .            # needs Python 3.11 or newer
 ansible-builder --version

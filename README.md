@@ -12,8 +12,9 @@ Mounted in Automation Portal at **`/automation-content`**.
 
 ## Local Development Setup for Automation Portal
 
-From a fresh clone to content on screen. About twenty minutes, most of it the image
-build in step 1 — start that first and set up the rest while it runs.
+From a fresh clone to content on screen. Most of the wall-clock is the image build in
+step 1 and the portal build in step 5 — start step 1 first and set up the rest while it
+runs.
 
 **You need:** Node 22 or 24 with Yarn 4 (`corepack enable`), Podman, and Python 3.11+.
 
@@ -46,6 +47,10 @@ Details: **[docs/guides/building-an-execution-environment.md](docs/guides/buildi
 **2. Install this repository**
 
 ```bash
+cd ..             # out of the ansible-builder clone from step 1
+git clone https://github.com/ansible/automation-content-plugins.git
+cd automation-content-plugins
+
 yarn install
 yarn tsc          # also emits dist-types/, which packaging later depends on
 yarn test
@@ -76,14 +81,52 @@ ansible-builder publish localhost:8080/demo/network-ee:dev --insecure
 `publish` pushes the image, then publishes the content manifest as an OCI referrer
 beside it — so a consumer can read what is inside without pulling gigabytes.
 
-**5. Run the backend**
+**5. Run the full stack in Automation Portal**
+
+This is the end-to-end flow: RHDH with dynamic plugin loading, and the content UI at
+`/automation-content`. It is the only place packaging and mounting are actually
+exercised, so it is what a new developer should see first.
 
 ```bash
+cd ..
+git clone --recurse-submodules \
+  git@github.com:ansible-automation-platform/automation-portal-local.git
+cd automation-portal-local
+git checkout feat/automation-content-plugins
+cp .env.example .env
+```
+
+In `.env`, point `CONTENT_PLUGIN_REPO` at your `automation-content-plugins` clone, and
+set `CONTENT_REGISTRY_URL` to `http://host.containers.internal:8080` with the username
+and password from `dev/quay/.env` — not `127.0.0.1`, which inside the container is the
+container itself.
+
+```bash
+make start                            # export + pack the plugins, start the portal
+```
+
+- Portal UI: `http://localhost:7007` — sign in with AAP → mock → `user` / `password`
+- Content UI: `http://localhost:7007/automation-content`
+
+The full variable list, the rebuild and reload targets, and the two check scripts are in
+**[docs/guides/automation-portal.md](docs/guides/automation-portal.md)**.
+
+**6. Or run just the backend**
+
+Step 5 is the end-to-end stack. If you only need the backend — the catalog, the content
+provider and the content API, no portal — the standalone harness restarts in seconds and
+is where most backend work happens. Skip step 5 and run this instead:
+
+```bash
+# from this repository, where step 4 left you
 cp .env.local.example .env.local      # already points at 127.0.0.1:8080
 yarn workspace backend start          # http://127.0.0.1:7007
 ```
 
-**6. Sync and look**
+**7. Sync and look**
+
+Either path serves on `127.0.0.1:7007`, so the same tools work against both. Run them
+from this repository — if step 5 left you in the portal clone, `cd` back first.
 
 ```bash
 node tools/sync-once.mjs local-registry     # discover now, rather than waiting
@@ -98,12 +141,6 @@ manifest did not reach the registry; check step 4.
 `sync-once` refreshes the content API immediately. Catalog *entities* are written by a
 separate scheduled provider that first runs a few seconds after startup, so give
 `show-catalog` a moment if it comes back empty.
-
----
-
-That is the standalone harness. For the real portal — RHDH, dynamic plugin loading, the
-UI at `/automation-content` — see
-**[docs/guides/automation-portal.md](docs/guides/automation-portal.md)**.
 
 ## Documentation
 

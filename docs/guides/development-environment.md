@@ -15,6 +15,9 @@ For the real thing — RHDH, dynamic plugin loading, the UI — see
 ## Install
 
 ```bash
+git clone https://github.com/ansible/automation-content-plugins.git
+cd automation-content-plugins
+
 yarn install
 yarn tsc          # also emits dist-types/, which packaging later depends on
 yarn test

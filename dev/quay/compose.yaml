@@ -16,7 +16,7 @@ services:
     volumes:
       - quay-db-data:/var/lib/postgresql/data
       # Quay requires the pg_trgm extension, and will not create it itself.
-      - ./pg-init.sql:/docker-entrypoint-initdb.d/pg_trgm.sql:ro
+      - ./pg-init.sql:/docker-entrypoint-initdb.d/pg_trgm.sql:ro,z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U quay -d quay"]
       interval: 5s
@@ -39,7 +39,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./config:/conf/stack:ro
+      - ./config:/conf/stack:ro,z
       - quay-storage:/datastorage
 
 volumes:

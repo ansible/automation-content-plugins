@@ -289,10 +289,7 @@ export async function createRouter(
 
   // Aliases retained so existing callers keep working. They are thin filters over the
   // type-agnostic handlers, not parallel implementations.
-  router.get('/execution-environments', (req, res) => {
-    req.query.type = EE_TYPE;
-    listContent(req, res);
-  });
+  router.get('/execution-environments', (req, res) => {req.query.type = EE_TYPE; listContent(req, res);});
   router.get('/execution-environments/:ref(*)/contents', getContents);
   router.get('/execution-environments/:ref(*)', getContent);
 

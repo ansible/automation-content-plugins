@@ -206,7 +206,8 @@ export class AutomationContentClient implements AutomationContentApi {
 
   async listExecutionEnvironments(): Promise<ExecutionEnvironment[]> {
     const { items } = await this.get<{ items: ExecutionEnvironment[] }>(
-      '/content?type=execution-environment',
+      // '/content?type=execution-environment',
+      '/content',
     );
     return items;
   }

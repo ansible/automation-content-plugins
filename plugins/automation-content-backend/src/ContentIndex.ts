@@ -379,6 +379,7 @@ export class ContentIndex {
 
     if (!state.capabilities) {
       try {
+        this.logger.info(`[${name}] starting capability probe`);
         state.capabilities = await new CapabilityProbe(client, {
           sampleRepository: state.connection.repositories?.[0],
           logger: {
@@ -386,6 +387,7 @@ export class ContentIndex {
             warn: m => this.logger.warn(m),
           },
         }).probe();
+        this.logger.info(`[${name}] capability probe complete`);
       } catch (error) {
         return { ok: false, error: `capability probe failed: ${error}`, artifacts: [] };
       }
@@ -394,6 +396,7 @@ export class ContentIndex {
     let repositories: string[];
     try {
       repositories = await this.resolveRepositories(name, state, client);
+      this.logger.info(`[${name}] resolved ${repositories.length} repositor(ies)`);
     } catch (error) {
       return { ok: false, error: `repository listing failed: ${error}`, artifacts: [] };
     }
@@ -403,7 +406,9 @@ export class ContentIndex {
 
     for (const repository of repositories) {
       try {
+        this.logger.info(`[${name}] scanning ${repository}`);
         found.push(...(await this.scanRepository(name, repository, client)));
+        this.logger.info(`[${name}] scanned ${repository}: ${found.length} artifact(s)`);
       } catch (error) {
         failures.push(`${repository}: ${(error as Error).message}`);
         this.logger.warn(`[${name}] ${repository}: ${(error as Error).message}`);
@@ -457,7 +462,18 @@ export class ContentIndex {
     for await (const tag of client.listTags(repository)) {
       if (REFERRER_TAG.test(tag)) continue;
       const head = await client.headManifest(repository, tag);
-      if (!head.digest) continue;
+      if (head.status === 429) {
+        this.logger.warn(
+          `[${registry}] rate-limited by registry while scanning ${repository}:${tag}; skipping remaining tags`,
+        );
+        break;
+      }
+      if (!head.digest) {
+        this.logger.debug(
+          `[${registry}] HEAD ${repository}:${tag} returned status ${head.status} with no digest; skipping`,
+        );
+        continue;
+      }
       byDigest.set(head.digest, [...(byDigest.get(head.digest) ?? []), tag]);
     }
 

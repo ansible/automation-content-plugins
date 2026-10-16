@@ -135,8 +135,9 @@ export class OCIClient {
 
     const res = await this.fetchImpl(url.toString(), { headers });
     if (!res.ok) {
+      const detail = await res.text().catch(() => '');
       this.logger?.warn(
-        `[${this.connection.name}] token exchange failed: ${res.status} ${url.origin}`,
+        `[${this.connection.name}] token exchange failed: ${res.status} ${url.toString()} — ${detail}`,
       );
       return undefined;
     }
@@ -187,7 +188,11 @@ export class OCIClient {
           if (res.status !== 401) return; // anonymous access, or an unexpected answer
           const header = res.headers.get('www-authenticate');
           const challenge = header ? OCIClient.parseChallenge(header) : undefined;
-          if (challenge) await this.fetchBearerToken(challenge);
+          // Drop the scope: priming only discovers the realm and service. Some
+          // registries (GHCR) embed a placeholder scope ("repository:user/image:pull")
+          // in the /v2/ challenge that fails token exchange. Real scopes come from
+          // per-request 401 challenges.
+          if (challenge) await this.fetchBearerToken({ ...challenge, scope: undefined });
         } catch (error) {
           // Priming is best effort. A registry that cannot be reached here will fail
           // the real request too, with a better message than this one could give.

@@ -47,6 +47,12 @@ catalog:
           # degrades to this list rather than failing.
           repositories:
             - demo/network-ee
+          # Plain HTTP to the local Quay. This is the explicit opt-out from
+          # transport trust: it also disables TLS certificate verification for
+          # this registry, and is warned about at startup. Verified HTTPS is
+          # the default; omit this for any real registry. A registry behind a
+          # private CA keeps verification on via caFile instead:
+          #   caFile: /path/to/ca-bundle.pem
           insecure: true
           # Credentials come from the environment, never from this file. For a
           # registry that needs none — a local zot or registry:2 — use

@@ -93,6 +93,24 @@ export interface ReconcileState {
 /** Referrer fallback tags address artifacts about an image, not images. */
 const REFERRER_TAG = /^sha256-[0-9a-f]{64}$/;
 
+/**
+ * The deepest message an error chain carries.
+ *
+ * Transport failures arrive wrapped — undici reports a TLS rejection as
+ * `fetch failed` with the real reason on `cause` — and a sync that fails with
+ * "fetch failed" tells an operator nothing. The chain is walked so the error
+ * that reaches the API names the actual problem.
+ */
+function errorText(error: unknown): string {
+  const parts: string[] = [];
+  let current = error as { message?: unknown; cause?: unknown };
+  while (current && typeof current.message === 'string') {
+    parts.push(current.message);
+    current = current.cause as typeof current;
+  }
+  return parts.join(': ') || String(error);
+}
+
 /** Composite key for a content item. */
 export function itemKey(artifactRef: string, fqcn: string): string {
   return `${artifactRef}::${fqcn}`;
@@ -387,7 +405,7 @@ export class ContentIndex {
           },
         }).probe();
       } catch (error) {
-        return { ok: false, error: `capability probe failed: ${error}`, artifacts: [] };
+        return { ok: false, error: `capability probe failed: ${errorText(error)}`, artifacts: [] };
       }
     }
 
@@ -395,7 +413,7 @@ export class ContentIndex {
     try {
       repositories = await this.resolveRepositories(name, state, client);
     } catch (error) {
-      return { ok: false, error: `repository listing failed: ${error}`, artifacts: [] };
+      return { ok: false, error: `repository listing failed: ${errorText(error)}`, artifacts: [] };
     }
 
     const found: IndexedArtifact[] = [];
@@ -405,8 +423,8 @@ export class ContentIndex {
       try {
         found.push(...(await this.scanRepository(name, repository, client)));
       } catch (error) {
-        failures.push(`${repository}: ${(error as Error).message}`);
-        this.logger.warn(`[${name}] ${repository}: ${(error as Error).message}`);
+        failures.push(`${repository}: ${errorText(error)}`);
+        this.logger.warn(`[${name}] ${repository}: ${errorText(error)}`);
       }
     }
 

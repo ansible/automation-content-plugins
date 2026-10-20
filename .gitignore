@@ -19,3 +19,8 @@ __pycache__/
 # Local Quay: generated config and secrets
 dev/quay/config/
 dev/quay/.env
+
+# TLS demo certificates (dev/tls)
+dev/tls/certs/
+dev/tls/proxy.pid
+dev/tls/proxy.log

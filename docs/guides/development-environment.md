@@ -42,6 +42,13 @@ export CONTENT_REGISTRY_USERNAME="$QUAY_USERNAME"
 export CONTENT_REGISTRY_PASSWORD="$QUAY_PASSWORD"
 ```
 
+Registry connections verify TLS by default and refuse plain HTTP, so `app-config.yaml`
+sets `insecure: true` on `local-registry` — the Quay above speaks plain HTTP. That flag
+is the single opt-out from transport trust: it also disables certificate verification
+for that registry and is logged as a warning at startup. A real registry over HTTPS
+needs no flag.
+See [ADR-006](../../.sdlc/adrs/006-tls-verification-by-default.md).
+
 ## Run
 
 ```bash
@@ -70,6 +77,12 @@ node tools/verify-drift-cache.mjs            # digest cache and drift behaviour
 
 `tools/trace-auth.mjs` prints the registry authentication handshake step by step, with
 secrets redacted — the first thing to reach for when a registry will not talk to you.
+
+## Portal-level TLS demo
+
+The transport trust policy (verified HTTPS by default, one auditable opt-out) has a
+full portal demo: one Quay behind three doors — plain HTTP, trusted HTTPS, untrusted
+HTTPS — all configured side by side. See [dev/tls](../../dev/tls/README.md).
 
 ## Tests
 

@@ -90,3 +90,16 @@ podman run -d -p 5001:5000 --name registry2 docker.io/library/registry:2
 Content must list and render identically against all three. Point `CONTENT_REGISTRY_URL`
 at each in turn and set `auth: { type: anonymous }` in `app-config.yaml` for the two that
 need no credentials.
+
+All three speak plain HTTP, so each needs `insecure: true` on its registry entry —
+plain HTTP is refused without it, and certificate verification is on by default for
+anything else. See
+[ADR-006](../../.sdlc/adrs/006-tls-verification-by-default.md).
+
+## Verified HTTPS against a private CA
+
+A registry behind a certificate your process does not trust does not need the
+opt-out: give the entry a `caFile` pointing at the CA bundle, and verification
+stays on — checked against that bundle exactly. The portal-level demo of the
+whole policy (trusted HTTPS, untrusted HTTPS, plain-HTTP opt-out, side by side)
+lives in [dev/tls](../../dev/tls/README.md).
